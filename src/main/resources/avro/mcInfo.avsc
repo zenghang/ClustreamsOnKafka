@@ -1,0 +1,7 @@
+{
+    "namespace": "org.kafkastreams.clustream.mcInfo",
+    "name": "McInfo",
+    "type": "record",
+    "fields": [
+    ]
+}

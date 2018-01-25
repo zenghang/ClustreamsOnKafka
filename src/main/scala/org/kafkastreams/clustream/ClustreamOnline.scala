@@ -5,8 +5,10 @@ import org.rocksdb.Experimental
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.{KStream, Produced}
-import org.kafkastreams.keyvalue.KeyValueImplicits
+import org.kafkastreams.implicits.KeyValueImplicits
 import java.lang
+
+import breeze.stats.distributions.Gaussian
 /**
   * Created by 11245 on 2018/1/19.
   */
@@ -56,7 +58,7 @@ class MapFunctionScalaExample(
     //currentN = data  时间的设计
     if(initialized){
       val assignations = assignToMicroCluster(data)
-      //updateMicroClusters(assignations)
+      updateMicroClusters(assignations)
 
       var i = 0
       for (mc <- microClusters) {
@@ -248,7 +250,16 @@ class MapFunctionScalaExample(
       var minDist = Double.PositiveInfinity
       var minIndex = Int.MaxValue
       var i = 0
-      //从topic里面取簇的信息，计算最近的簇的标签
+      //从topic里面取簇的信息，计算最近的簇的标签,这里的mcInfo需要改成从topic里面去取
+
+      for (mc <- mcInfo) {
+        val dist = squaredDistance(value,mc._1.centroid)
+        if (dist < minDist) {
+          minDist = dist
+          minIndex = mc._2
+        }
+        i += 1
+      }
       (minIndex, value)
     }
   }
@@ -257,15 +268,75 @@ class MapFunctionScalaExample(
     *
     * @param assignations
     */
-  private def updateMicroClusters(assignations:KStream[(Int,Vector[Double])]): Unit = {
-    var dataInAndOut: KStream[(Int, (Int, Vector[Double]))] = null
-    var dataIn: KStream[(Int, Vector[Double])] = null
-    var dataOut: KStream[(Int, Vector[Double])] = null
+  private def updateMicroClusters(assignations:KStream[Int,Vector[Double]]): Unit = {
+    var dataInAndOut: KStream[Int, (Int, Vector[Double])] = null
+    var dataIn: KStream[Int, Vector[Double]] = null
+    var dataOut: KStream[Int, Vector[Double]] = null
     //1.Calculate RMSD
     if (initialized) {
       //从topic里面拿簇的信息，计算点到最近簇的距离，将距离与半径对比，分为在簇内和簇外
+      dataInAndOut = assignations.map{(key,value) =>
+        var nearMCInfo:MicroClusterInfo = null
+        //这里的mcInfo应该改为从topic里面取
+        for (mc <- mcInfo){
+          if(key == mc._2){
+            nearMCInfo = mc._1
+          }
+        }
+        val nearDistance = scala.math.sqrt(squaredDistance(value, nearMCInfo.centroid))
+        if (nearDistance <= tFactor * nearMCInfo.rmsd) (1, (key,value))
+        else (0, (key,value))
+      }
     }
     //2.Separate data
+    if(dataInAndOut != null){
+      dataIn = dataInAndOut.filter((key,value) => key==1).map((key,value) => (value._1,value._2))
+      dataOut = dataInAndOut.filter((key,value) => key==0).map((key,value) => (value._1,value._2))
+    }else dataIn = assignations
+
+    // Compute sums, sums of squares and count points... all by key
+    val sumsAndSumsSquares = timer {
+      val aggregateFuntion = (aa: (Vector[Double], Vector[Double], Long), bb: (Vector[Double], Vector[Double], Long)) => (aa._1 :+ bb._1, aa._2 :+ bb._2, aa._3 + bb._3)
+      //dataIn.mapValues(a => (a, a :* a, 1L)).
+    }
+    var totalIn = 0L
+    for (mc <- microClusters) {
+//      for (ss <- sumsAndSumsSquares) if (mc.getIds(0) == ss._1) {
+//        mc.setCf1x(mc.cf1x :+ ss._2._1)
+//        mc.setCf2x(mc.cf2x :+ ss._2._2)
+//        mc.setN(mc.n + ss._2._3)
+//        mc.setCf1t(mc.cf1t + ss._2._3 * this.time)
+//        mc.setCf2t(mc.cf2t + ss._2._3 * (this.time * this.time))
+//        totalIn += ss._2._3
+//      }
+    }
+
+    //dataout
+    timer{
+      if(dataOut != null && currentN - totalIn != 0){
+        var mTimeStamp: Double = 0.0
+        val recencyThreshold = this.time - delta
+        var safeDeleteMC: Array[Int] = Array()
+        var keepOrMergeMC: Array[Int] = Array()
+        var i = 0
+
+        for (mc <- microClusters) {
+          val meanTimeStamp = if (mc.getN > 0) mc.getCf1t.toDouble / mc.getN.toDouble else 0
+          val sdTimeStamp = scala.math.sqrt(mc.getCf2t.toDouble / mc.getN.toDouble - meanTimeStamp * meanTimeStamp)
+
+          if (mc.getN < 2 * mLastPoints) mTimeStamp = meanTimeStamp
+          else mTimeStamp = Gaussian(meanTimeStamp, sdTimeStamp).inverseCdf(1 - mLastPoints / (2 * mc.getN.toDouble))
+
+          if (mTimeStamp < recencyThreshold || mc.getN == 0) safeDeleteMC = safeDeleteMC :+ i
+          else keepOrMergeMC = keepOrMergeMC :+ i
+
+          i += 1
+        }
+
+        var j = 0
+        var newMC: Array[Int] = Array()
+      }
+    }
 
   }
 }

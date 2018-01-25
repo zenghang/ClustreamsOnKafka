@@ -1,4 +1,4 @@
-package org.kafkastreams.keyvalue
+package org.kafkastreams.implicits
 
 /**
   * Created by 11245 on 2018/1/19.

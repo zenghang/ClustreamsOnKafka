@@ -2,9 +2,7 @@ package org.kafkastreams.clustream
 
 import java.io.Serializable
 import java.util.Properties
-
-import org.apache.commons.math3.stat.inference.TestUtils
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import breeze.linalg._
 import org.apache.kafka.common.serialization.{Serde, Serdes}
 import org.apache.kafka.streams.kstream.KStream
 import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
@@ -25,7 +23,7 @@ object Clustream{
   def main(args: Array[String]): Unit = {
     val Clu = new CluStreamOnline(20,3,10)
 
-    val inputTopic = "CluStream-inputTopic"
+    val inputTopic = "CluStream"
     val bootstrapServers = "localhost:9092"
     val streamsConfiguration: Properties = {
       val p = new Properties()
@@ -46,12 +44,17 @@ object Clustream{
 
     val inputData : KStream[String,String] = builder.stream(inputTopic)
 
+    inputData.foreach{ (k,v) =>
+      val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
+      Clu.run(data)
+    }
+
     val streams : KafkaStreams = new KafkaStreams(builder.build(),streamsConfiguration)
+
 
     streams.cleanUp()
     streams.start()
 
-    Clu.run(inputData)
 
 
   }

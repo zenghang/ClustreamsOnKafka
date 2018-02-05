@@ -259,70 +259,70 @@ class CluStreamOnline(
     * @param dataPoints
     */
   private def updateMicroClusters(dataPoints:KStream[String,String]): Unit = {
-    var mcStream: KStream[Array[Double],MicroCluster] = null
-    if(initialized){
-      mcStream = dataPoints.map{
-        (key,valueString) =>
-          val value = Vector(valueString.split(",").map(_.toDouble))
-          var finalMC = null
-          // 1.找到最近的类簇
-          val nearestMC = findNearestMicoCluster(value)
-          val minDistance = Math.sqrt(squaredDistance(nearestMC.getCenter, value))
-            //如果在类簇半径范围内，则将点添加进去
-            if(minDistance <= tFactor * nearestMC.rmsd) {
-              nearestMC.addPoint(value,this.time)
-              nearestMC.setRmsd(distanceNearestMC(nearestMC.getCenter,microClusters))
-              this.time += 1L
-              //打印此类簇（测试用）
-              print(nearestMC)
-            }
-            else {
-              //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
-              val DeletedIndex : Int = deleteAndReplaceMicoCluster(value)
-
-              //3.如果没有可删除的类簇，则进行合并，然后以数据点为中心新建一个类簇
-              if(DeletedIndex == -1) {
-                val MergedIndex : Int = mergeAndReplaceMicroCluster(value)
-                //打印类簇（测试用）
-                print(microClusters(MergedIndex))
-              }
-              //打印类簇（测试用）
-              print(microClusters(DeletedIndex))
-            }
-
-
-          (microClusters(1).getCenter.toArray,microClusters(1))
-      }
-    }
-//    dataPoints.foreach{ (key,valueString) =>
+//    var mcStream: KStream[Array[Double],MicroCluster] = null
+//    if(initialized){
+//      mcStream = dataPoints.map{
+//        (key,valueString) =>
+//          val value = Vector(valueString.split(",").map(_.toDouble))
+//          var finalMC = null
+//          // 1.找到最近的类簇
+//          val nearestMC = findNearestMicoCluster(value)
+//          val minDistance = Math.sqrt(squaredDistance(nearestMC.getCenter, value))
+//            //如果在类簇半径范围内，则将点添加进去
+//            if(minDistance <= tFactor * nearestMC.rmsd) {
+//              nearestMC.addPoint(value,this.time)
+//              nearestMC.setRmsd(distanceNearestMC(nearestMC.getCenter,microClusters))
+//              this.time += 1L
+//              //打印此类簇（测试用）
+//              print(nearestMC)
+//            }
+//            else {
+//              //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
+//              val DeletedIndex : Int = deleteAndReplaceMicoCluster(value)
 //
-//        val value = Vector(valueString.split(",").map(_.toDouble))
-//        var finalMC = null
-//        // 1.找到最近的类簇
-//        val nearestMC = findNearestMicoCluster(value)
-//        val minDistance = Math.sqrt(squaredDistance(nearestMC.getCenter, value))
-//        //如果在类簇半径范围内，则将点添加进去
-//        if(minDistance <= tFactor * nearestMC.rmsd) {
-//          nearestMC.addPoint(value,this.time)
-//          nearestMC.setRmsd(distanceNearestMC(nearestMC.getCenter,microClusters))
-//          this.time += 1L
-//          //打印此类簇（测试用）
-//          print(nearestMC)
-//        }
-//        else {
-//          //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
-//          val DeletedIndex : Int = deleteAndReplaceMicoCluster(value)
+//              //3.如果没有可删除的类簇，则进行合并，然后以数据点为中心新建一个类簇
+//              if(DeletedIndex == -1) {
+//                val MergedIndex : Int = mergeAndReplaceMicroCluster(value)
+//                //打印类簇（测试用）
+//                print(microClusters(MergedIndex))
+//              }
+//              //打印类簇（测试用）
+//              print(microClusters(DeletedIndex))
+//            }
 //
-//          //3.如果没有可删除的类簇，则进行合并，然后以数据点为中心新建一个类簇
-//          if(DeletedIndex == -1) {
-//            val MergedIndex : Int = mergeAndReplaceMicroCluster(value)
-//            //打印类簇（测试用）
-//            print(microClusters(MergedIndex))
-//          }
-//          //打印类簇（测试用）
-//          print(microClusters(DeletedIndex))
-//        }
+//
+//          (microClusters(1).getCenter.toArray,microClusters(1))
+//      }
 //    }
+    dataPoints.foreach{ (key,valueString) =>
+
+        val value = Vector(valueString.split(",").map(_.toDouble))
+        var finalMC = null
+        // 1.找到最近的类簇
+        val nearestMC = findNearestMicoCluster(value)
+        val minDistance = Math.sqrt(squaredDistance(nearestMC.getCenter, value))
+        //如果在类簇半径范围内，则将点添加进去
+        if(minDistance <= tFactor * nearestMC.rmsd) {
+          nearestMC.addPoint(value,this.time)
+          nearestMC.setRmsd(distanceNearestMC(nearestMC.getCenter,microClusters))
+          this.time += 1L
+          //打印此类簇（测试用）
+          print(nearestMC)
+        }
+        else {
+          //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
+          val DeletedIndex : Int = deleteAndReplaceMicoCluster(value)
+
+          //3.如果没有可删除的类簇，则进行合并，然后以数据点为中心新建一个类簇
+          if(DeletedIndex == -1) {
+            val MergedIndex : Int = mergeAndReplaceMicroCluster(value)
+            //打印类簇（测试用）
+            print(microClusters(MergedIndex))
+          }
+          //打印类簇（测试用）
+          print(microClusters(DeletedIndex))
+        }
+    }
   }
 }
 

@@ -1,12 +1,11 @@
 package org.kafkastreams.clustream
 
 import breeze.linalg._
-import org.rocksdb.Experimental
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.{KStream, Produced}
 import org.kafkastreams.implicits.KeyValueImplicits
-import java.lang
+
 
 import breeze.stats.distributions.Gaussian
 /**
@@ -26,6 +25,10 @@ class CluStreamOnline(
     val t1 = System.nanoTime()
     result
   }
+
+  //cluOnline类标记（测试用）
+  private val Cluid : Double = rand()
+
   private var mLastPoints = 500
   private var delta = 20
   private var tFactor = 2.0
@@ -68,11 +71,15 @@ class CluStreamOnline(
     *
     * @param data
     */
-  def run(data:KStream[String,String]):Unit = {
+  def run(data:Vector[Double]):Unit = {
     //currentN = data  时间的设计
-
+    if (initialized) {
+      updateMicroClusters(data)
+    } else {
       initRandom
       updateMicroClusters(data)
+    }
+
 
     //
   }
@@ -213,6 +220,7 @@ class CluStreamOnline(
       if (microClusters(i).getMTimeStamp(mLastPoints) < recencyThreshold || microClusters(i).getN == 0){
         val ids = microClusters(i).getIds
         microClusters(i) = new MicroCluster(point :* point, point, this.time * this.time, this.time, 1L)
+        this.time += 1L
         microClusters(i).setCenter(point)
         //暂时设为原来的id
         microClusters(i).setIds(ids)
@@ -243,6 +251,7 @@ class CluStreamOnline(
     mergeMicroClusters(closestA,closestB)
     val ids = microClusters(closestB).getIds
     microClusters(closestB) = new MicroCluster(point :* point, point, this.time * this.time, this.time, 1L)
+    this.time += 1L
     microClusters(closestB).setCenter(point)
     //暂时设为原来的id
     microClusters(closestB).setIds(ids)
@@ -252,51 +261,9 @@ class CluStreamOnline(
 
   }
 
-  import KeyValueImplicits._
 
-  /**
-    *
-    * @param dataPoints
-    */
-  private def updateMicroClusters(dataPoints:KStream[String,String]): Unit = {
-//    var mcStream: KStream[Array[Double],MicroCluster] = null
-//    if(initialized){
-//      mcStream = dataPoints.map{
-//        (key,valueString) =>
-//          val value = Vector(valueString.split(",").map(_.toDouble))
-//          var finalMC = null
-//          // 1.找到最近的类簇
-//          val nearestMC = findNearestMicoCluster(value)
-//          val minDistance = Math.sqrt(squaredDistance(nearestMC.getCenter, value))
-//            //如果在类簇半径范围内，则将点添加进去
-//            if(minDistance <= tFactor * nearestMC.rmsd) {
-//              nearestMC.addPoint(value,this.time)
-//              nearestMC.setRmsd(distanceNearestMC(nearestMC.getCenter,microClusters))
-//              this.time += 1L
-//              //打印此类簇（测试用）
-//              print(nearestMC)
-//            }
-//            else {
-//              //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
-//              val DeletedIndex : Int = deleteAndReplaceMicoCluster(value)
-//
-//              //3.如果没有可删除的类簇，则进行合并，然后以数据点为中心新建一个类簇
-//              if(DeletedIndex == -1) {
-//                val MergedIndex : Int = mergeAndReplaceMicroCluster(value)
-//                //打印类簇（测试用）
-//                print(microClusters(MergedIndex))
-//              }
-//              //打印类簇（测试用）
-//              print(microClusters(DeletedIndex))
-//            }
-//
-//
-//          (microClusters(1).getCenter.toArray,microClusters(1))
-//      }
-//    }
-    dataPoints.foreach{ (key,valueString) =>
+  private def updateMicroClusters(value:Vector[Double]): Unit = {
 
-        val value = Vector(valueString.split(",").map(_.toDouble))
         var finalMC = null
         // 1.找到最近的类簇
         val nearestMC = findNearestMicoCluster(value)
@@ -322,7 +289,15 @@ class CluStreamOnline(
           //打印类簇（测试用）
           print(microClusters(DeletedIndex))
         }
-    }
+  }
+
+  /**
+    *
+    * @define 测试用
+    * @return
+    */
+  override def toString = {
+    "CluID:" +  Cluid
   }
 }
 
@@ -444,28 +419,6 @@ protected class MicroCluster(
       "Cf1t:  "+cf1t.toString+"\n"+
       "Cf2t:  "+cf2t.toString+"\n"+
       "Centroid:  "+center.toString+"\n"
-  }
-}
-
-
-/**
-  *
-  * @param centroid
-  * @param rmsd
-  * @param n
-  */
-private class MicroClusterInfo(
-                                var centroid: Vector[Double],
-                                var rmsd:Double,
-                                var n:Long)extends Serializable{
-  def setCentroid(centroid:Vector[Double]): Unit ={
-    this.centroid = centroid
-  }
-  def setRmsd(rmsd:Double):Unit = {
-    this.rmsd = rmsd
-  }
-  def setN(n:Long):Unit = {
-    this.n = n
   }
 }
 

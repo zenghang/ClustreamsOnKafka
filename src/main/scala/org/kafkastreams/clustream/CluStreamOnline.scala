@@ -64,6 +64,8 @@ class CluStreamOnline(
       mc.setIds(Array(i))
       i+=1
     }
+    for(mc <- microClusters)
+      mc.setRmsd(distanceNearestMC(mc.center, microClusters))
     initialized = true
   }
 
@@ -219,12 +221,12 @@ class CluStreamOnline(
     for(i <- 0 until q){
       if (microClusters(i).getMTimeStamp(mLastPoints) < recencyThreshold || microClusters(i).getN == 0){
         val ids = microClusters(i).getIds
-        microClusters(i) = new MicroCluster(point :* point, point, this.time * this.time, this.time, 1L)
+        microClusters(i) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
+        microClusters(i).addPoint(point,this.time)
         this.time += 1L
         microClusters(i).setCenter(point)
         //暂时设为原来的id
         microClusters(i).setIds(ids)
-        microClusters(i).setRmsd(distanceNearestMC(point, microClusters))
         return i
       }
     }
@@ -250,7 +252,8 @@ class CluStreamOnline(
 
     mergeMicroClusters(closestA,closestB)
     val ids = microClusters(closestB).getIds
-    microClusters(closestB) = new MicroCluster(point :* point, point, this.time * this.time, this.time, 1L)
+    microClusters(closestB) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
+    microClusters(closestB).addPoint(point,this.time)
     this.time += 1L
     microClusters(closestB).setCenter(point)
     //暂时设为原来的id
@@ -340,6 +343,7 @@ protected class MicroCluster(
     setCf2t(cf2t + time*time)
     setN(n + 1L)
     setCenter(cf1x :/ n.toDouble)
+    setRmsd(scala.math.sqrt(sum(this.cf2x) / this.n.toDouble - sum(this.cf1x.map(a => a * a)) / (this.n * this.n.toDouble)))
   }
 
   def getMTimeStamp(mLastPoints :Int) = {

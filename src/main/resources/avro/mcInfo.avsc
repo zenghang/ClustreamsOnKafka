@@ -3,5 +3,10 @@
     "name": "McInfo",
     "type": "record",
     "fields": [
+        {"name": "n", "type": "long"},
+        {"name": "cf1x", "type":"string"},
+        {"name": "cf2x", "type":"string"},
+        {"name": "cf1t", "type": "long"},
+        {"name": "cf2t", "type": "long"}
     ]
 }

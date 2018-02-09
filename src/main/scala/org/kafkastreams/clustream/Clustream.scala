@@ -2,7 +2,10 @@ package org.kafkastreams.clustream
 
 import java.io.Serializable
 import java.util.Properties
+import java.util.concurrent.{Callable, Executors, TimeUnit}
+
 import breeze.linalg._
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.{Serde, Serdes}
 import org.apache.kafka.streams.kstream.KStream
 import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
@@ -21,13 +24,33 @@ class Clustream (
 
 object Clustream{
   def main(args: Array[String]): Unit = {
-    val Clu = new CluStreamOnline(20,3,10)
 
-    val inputTopic = "CluStream"
+
+    val numThreads = 1
+
+    val threadPool = Executors.newFixedThreadPool(numThreads)
+
+    for (i <- 0 until numThreads){
+      threadPool.submit(new OnlineTask)
+    }
+
+
+  }
+}
+
+
+class OnlineTask extends Runnable{
+  override def run(): Unit = {
+    val inputTopic = "CluStreamTest0"
+    val middleTopic = "CluSterAsPointTest0"
+
+    val schemaRegistryUrl = "http://localhost:8081"
     val bootstrapServers = "localhost:9092"
+//    val bootstrapServers = "192.168.222.226:9092"
+
     val streamsConfiguration: Properties = {
       val p = new Properties()
-      p.put(StreamsConfig.APPLICATION_ID_CONFIG, "CluStreamOnKStream-test")
+      p.put(StreamsConfig.APPLICATION_ID_CONFIG, "CluStreamOnKStream-test0")
       p.put(StreamsConfig.CLIENT_ID_CONFIG, "CluStreamOnKStream-test-client")
       p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
       p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
@@ -38,25 +61,47 @@ object Clustream{
       p
     }
 
-    val stringSerde: Serde[String] = Serdes.String()
+    val produerProperties: Properties = {
+      val p = new Properties()
+      p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+      p
+    }
 
     val builder: StreamsBuilder = new StreamsBuilder()
 
     val inputData : KStream[String,String] = builder.stream(inputTopic)
 
+    val Clu = new CluStreamOnline(20,3,10)
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
       Clu.run(data)
+      println(Clu)
     }
 
-    val streams : KafkaStreams = new KafkaStreams(builder.build(),streamsConfiguration)
+    val timerPool = Executors.newScheduledThreadPool(1)
+    timerPool.scheduleAtFixedRate(new SendTask(Clu,produerProperties,schemaRegistryUrl,middleTopic),20,20,TimeUnit.SECONDS)
 
+    val streams : KafkaStreams = new KafkaStreams(builder.build(),streamsConfiguration)
 
     streams.cleanUp()
     streams.start()
 
 
 
+
+
+
   }
 }
 
+
+class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properties,val schemaRegistryUrl:String,val topicName:String ) extends Runnable {
+  override def run(): Unit = {
+
+    println("before Time:"+cluOnline.getCurrentTime)
+    cluOnline.sendClustersToTopic(topicName,schemaRegistryUrl,producerProperties)
+    cluOnline.initRandom
+    println("after Time:"+cluOnline.getCurrentTime)
+
+  }
+}

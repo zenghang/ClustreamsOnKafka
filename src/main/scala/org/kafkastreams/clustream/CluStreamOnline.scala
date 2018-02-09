@@ -1,13 +1,18 @@
 package org.kafkastreams.clustream
 
+import java.util
+import java.util.{Collections, Properties}
+
 import breeze.linalg._
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.streams._
-import org.apache.kafka.streams.kstream.{KStream, Produced}
+import org.apache.kafka.streams.kstream.KStream
 import org.kafkastreams.implicits.KeyValueImplicits
-
-
 import breeze.stats.distributions.Gaussian
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig
+import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.kafkastreams.clustream.mcInfo.McInfo
+
 /**
   * Created by 11245 on 2018/1/19.
   */
@@ -57,7 +62,8 @@ class CluStreamOnline(
     * @define 随机初始化分布式聚类的类簇
     *
     */
-  private def initRandom = {
+   def initRandom = {
+    this.time = 0L
     var i =1;
     for(mc <- microClusters){
       mc.setCenter(Vector.fill[Double](numDimensions)(rand()))
@@ -264,6 +270,40 @@ class CluStreamOnline(
 
   }
 
+  def arrayToString(array: Array[Double]) : String = {
+
+    var centerString : String = ""
+    for (i <- 0 until array.length) {
+      centerString += array(i).toString
+      if (i != array.length - 1)
+        centerString += ","
+    }
+    centerString
+
+  }
+
+  def sendClustersToTopic(topic : String,schemaRegistryUrl:String,producerConfig : Properties): Unit ={
+    //设置序列化器
+    val serdeConfig : util.Map[String, String] = Collections.singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
+    val McInfoSerde : SpecificAvroSerde[McInfo] = new SpecificAvroSerde[McInfo]()
+    McInfoSerde.configure(serdeConfig, false)
+
+    val mcProducer : KafkaProducer[String,McInfo] = new KafkaProducer[String,McInfo](producerConfig
+      ,Serdes.String().serializer(),McInfoSerde.serializer())
+
+    for (mc <- microClusters) {
+      val centroid : String= arrayToString(mc.center.toArray)
+      val cf1xString : String = arrayToString(mc.cf1x.toArray)
+      val cf2xString : String = arrayToString(mc.cf2x.toArray)
+      val mcInfo : McInfo =  new McInfo(mc.n,cf1xString,cf2xString,mc.cf1t,mc.cf2t)
+
+      mcProducer.send(new ProducerRecord[String,McInfo](topic,centroid,mcInfo))
+
+      //打印信息测试用
+      println("send\n"+mc.toString+"to middleTopic")
+    }
+  }
+
 
   private def updateMicroClusters(value:Vector[Double]): Unit = {
 
@@ -274,7 +314,6 @@ class CluStreamOnline(
         //如果在类簇半径范围内，则将点添加进去
         if(minDistance <= tFactor * nearestMC.rmsd) {
           nearestMC.addPoint(value,this.time)
-          nearestMC.setRmsd(distanceNearestMC(nearestMC.getCenter,microClusters))
           this.time += 1L
           //打印此类簇（测试用）
           print(nearestMC)
@@ -425,5 +464,6 @@ protected class MicroCluster(
       "Centroid:  "+center.toString+"\n"
   }
 }
+
 
 

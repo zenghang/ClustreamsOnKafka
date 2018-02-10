@@ -15,6 +15,8 @@ import org.apache.kafka.streams.kstream.KStream
 import org.apache.kafka.streams.{Consumed, KafkaStreams, StreamsBuilder, StreamsConfig}
 import org.kafkastreams.clustream.mcInfo.McInfo
 
+import scala.util.control.Breaks
+
 /**
   * Created by 11245 on 2018/1/23.
   */
@@ -125,9 +127,14 @@ class GloableOnlineTask extends Runnable {
     val builder: StreamsBuilder = new StreamsBuilder()
 
     val inputData: KStream[String, McInfo] = builder.stream(inputTopic, Consumed.`with`(Serdes.String, McInfoSerde))
-
+    //测试是否能取到数据
+    val data : KStream[String, McInfo] = inputData.peek{(k,v) =>
+      println("key is :" + k)
+      println("N is :" + v.getN)
+      println("Time is :" + v.getCf1t)
+    }
     val Clu = new CluStreamOnline(10, 3, 10)
-    inputData.foreach { (k, v) =>
+    data.foreach { (k, v) =>
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 
       Clu.globalrun(data, v.getN, v.getCf1t)
@@ -144,11 +151,22 @@ class GloableOnlineTask extends Runnable {
 
 class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properties,val schemaRegistryUrl:String,val topicName:String ) extends Runnable {
   override def run(): Unit = {
+    val hasAnypoint : Boolean = {
+      val loop  = new Breaks
+      var has = false
 
-    println("before Time:"+cluOnline.getCurrentTime)
-    cluOnline.sendClustersToTopic(topicName,schemaRegistryUrl,producerProperties)
-    cluOnline.initRandom
-    println("after Time:"+cluOnline.getCurrentTime)
+      loop.breakable(for (mc <- cluOnline.getMicroClusters){
+        if(mc.n != 0)
+          has = true
+      })
+      has
+    }
 
+    if(hasAnypoint){
+      println("before Time:"+cluOnline.getCurrentTime)
+      cluOnline.sendClustersToTopic(topicName,schemaRegistryUrl,producerProperties)
+      cluOnline.initRandom
+      println("after Time:"+cluOnline.getCurrentTime)
+    }
   }
 }

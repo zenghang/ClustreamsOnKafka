@@ -246,18 +246,18 @@ class CluStreamOnline(
     DeletedIndex
   }
 
-  private def gdeleteAndReplaceMicoCluster(point : Vector[Double]) : Int = {
+  private def gdeleteAndReplaceMicoCluster(point : Vector[Double],num : Long,datatime : Long) : Int = {
     var DeletedIndex = -1
+    this.time = datatime
     val recencyThreshold = this.time - delta
     for(i <- 0 until q){
       if (microClusters(i).getMTimeStamp(mLastPoints) < recencyThreshold || microClusters(i).getN == 0){
-        val ids = microClusters(i).getIds
+        //val ids = microClusters(i).getIds
         microClusters(i) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
-        microClusters(i).addPoint(point,N,this.time)
-        this.time += 1L
+        microClusters(i).addPoint(point,num,datatime)
         microClusters(i).setCenter(point)
         //暂时设为原来的id，后面改成id递增
-        microClusters(i).setIds(ids)
+        //microClusters(i).setIds(ids)
         return i
       }
     }
@@ -295,7 +295,7 @@ class CluStreamOnline(
 
   }
 
-  private def gmergeAndReplaceMicroCluster(point : Vector[Double],datatime : Long) : Int = {
+  private def gmergeAndReplaceMicroCluster(point : Vector[Double],num : Long,datatime : Long) : Int = {
     //找到距离最近的两个类簇
     var closestA = 0
     var closestB = 0
@@ -313,12 +313,12 @@ class CluStreamOnline(
     }
 
     mergeMicroClusters(closestA,closestB)
-    val ids = microClusters(closestB).getIds
+    //val ids = microClusters(closestB).getIds
     microClusters(closestB) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
-    microClusters(closestB).addPoint(point,datatime)
+    microClusters(closestB).addPoint(point,num,datatime)
     microClusters(closestB).setCenter(point)
-    //暂时设为原来的id，后面应该改成id递增
-    microClusters(closestB).setIds(ids)
+    //暂时设为原来的id，后面应该改成id递增(new 一个MicroCluster时 构造函数默认将id设置为递增1)
+    //microClusters(closestB).setIds(ids)
     microClusters(closestB).setRmsd(distanceNearestMC(point, microClusters))
 
     closestB
@@ -387,22 +387,22 @@ class CluStreamOnline(
           print(microClusters(DeletedIndex))
         }
   }
-  private def globalupadateMicroClusters(data:Vector[Double],N: Long,datatime:Long): Unit = {
+  private def globalupadateMicroClusters(data:Vector[Double],num: Long,datatime:Long): Unit = {
     //1.找到最近的簇
     val nearestMC = findNearestMicoCluster(data)
     val minDistance = Math.sqrt(squaredDistance(nearestMC.getCenter, data))
     //如果在类簇半径范围内，则将点添加进去
     if(minDistance <= tFactor * nearestMC.rmsd) {
-      nearestMC.addPoint(data,N,datatime)
+      nearestMC.addPoint(data,num,datatime)
       //打印此类簇（测试用）
       print(nearestMC)
     }else{
       //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
-      val DeletedIndex : Int = gdeleteAndReplaceMicoCluster(data)
+      val DeletedIndex : Int = gdeleteAndReplaceMicoCluster(data,num,datatime)
 
       //3.如果没有可删除的类簇，则进行合并，然后以数据点为中心新建一个类簇
       if(DeletedIndex == -1) {
-        val MergedIndex : Int = gmergeAndReplaceMicroCluster(data,datatime)
+        val MergedIndex : Int = gmergeAndReplaceMicroCluster(data,num,datatime)
         //打印类簇（测试用）
         print(microClusters(MergedIndex))
       }
@@ -462,12 +462,12 @@ protected class MicroCluster(
     setCenter(cf1x :/ n.toDouble)
     setRmsd(scala.math.sqrt(sum(this.cf2x) / this.n.toDouble - sum(this.cf1x.map(a => a * a)) / (this.n * this.n.toDouble)))
   }
-  def addPoint(point :Vector[Double],N:Long,time:Long) : Unit = {
+  def addPoint(point :Vector[Double],num:Long,time:Long) : Unit = {
     setCf1x(cf1x :+ point)
     setCf2x(cf2x :+ (point :* point))
     setCf1t(cf1t + time)
     setCf2t(cf2t + time*time)
-    setN(n + N)
+    setN(n + num)
     setCenter(cf1x :/ n.toDouble)
     setRmsd(scala.math.sqrt(sum(this.cf2x) / this.n.toDouble - sum(this.cf1x.map(a => a * a)) / (this.n * this.n.toDouble)))
   }

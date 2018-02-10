@@ -354,6 +354,7 @@ class CluStreamOnline(
     //如果在类簇半径范围内，则将点添加进去
     if(minDistance <= tFactor * nearestMC.rmsd) {
       nearestMC.addPoint(mcInfo)
+      this.time+=mcInfo.getN
       //打印此类簇（测试用）
       print(nearestMC)
     }else{

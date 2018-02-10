@@ -9,6 +9,7 @@ import breeze.linalg._
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde
 import org.apache.avro.specific.SpecificRecord
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.{Serde, Serdes}
 import org.apache.kafka.streams.kstream.KStream
@@ -113,6 +114,7 @@ class GloableOnlineTask extends Runnable {
       p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
       p.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl)
       p.put(StreamsConfig.APPLICATION_SERVER_CONFIG, applicationServerPort)
+      p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[SpecificAvroSerde[_ <: SpecificRecord]])
       // The commit interval for flushing records to state stores and downstream must be lower than
@@ -137,7 +139,7 @@ class GloableOnlineTask extends Runnable {
     data.foreach { (k, v) =>
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 
-      Clu.globalrun(data, v.getN, v.getCf1t)
+      Clu.globalrun(data, v)
       println(Clu)
     }
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)

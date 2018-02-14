@@ -65,6 +65,7 @@ class CluStreamOnline(
    def initRandom = {
     this.time = 0L
     var i =1;
+     microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
     for(mc <- microClusters){
       mc.setCenter(Vector.fill[Double](numDimensions)(rand()))
       mc.setIds(Array(i))
@@ -80,7 +81,6 @@ class CluStreamOnline(
     * @param data
     */
   def run(data:Vector[Double]):Unit = {
-    //currentN = data  时间的设计
     if (initialized) {
       updateMicroClusters(data)
     } else {
@@ -88,8 +88,7 @@ class CluStreamOnline(
       updateMicroClusters(data)
     }
 
-
-    //
+    
   }
   def globalrun(data:Vector[Double],mcInfo:McInfo):Unit = {
     if(initialized){
@@ -304,15 +303,17 @@ class CluStreamOnline(
       ,Serdes.String().serializer(),McInfoSerde.serializer())
 
     for (mc <- microClusters) {
-      val centroid : String= arrayToString(mc.center.toArray)
-      val cf1xString : String = arrayToString(mc.cf1x.toArray)
-      val cf2xString : String = arrayToString(mc.cf2x.toArray)
-      val mcInfo : McInfo =  new McInfo(mc.n,cf1xString,cf2xString,mc.cf1t,mc.cf2t)
+      if(mc.n > 0) {
+        val centroid : String= arrayToString(mc.center.toArray)
+        val cf1xString : String = arrayToString(mc.cf1x.toArray)
+        val cf2xString : String = arrayToString(mc.cf2x.toArray)
+        val mcInfo : McInfo =  new McInfo(mc.n,cf1xString,cf2xString,mc.cf1t,mc.cf2t)
 
-      mcProducer.send(new ProducerRecord[String,McInfo](topic,centroid,mcInfo))
+        mcProducer.send(new ProducerRecord[String,McInfo](topic,centroid,mcInfo))
 
-      //打印信息测试用
-      println("send\n"+mc.toString+"to middleTopic")
+        //打印信息测试用
+        println(mc.toString)
+      }
     }
   }
 
@@ -506,11 +507,11 @@ protected class MicroCluster(
   }
 
   override def toString = {
-      "n:  "+n+"\n"+
-      "Cf1x:  "+cf1x.toString+"\n"+
-      "Cf2x:  "+cf2x.toString+"\n"+
-      "Cf1t:  "+cf1t.toString+"\n"+
-      "Cf2t:  "+cf2t.toString+"\n"+
+      "n:  "+n+" || "+
+      "Cf1x:  "+cf1x.toString+" || "+
+      "Cf2x:  "+cf2x.toString+" || "+
+      "Cf1t:  "+cf1t.toString+" || "+
+      "Cf2t:  "+cf2t.toString+" || "+
       "Centroid:  "+center.toString+"\n"
   }
 }

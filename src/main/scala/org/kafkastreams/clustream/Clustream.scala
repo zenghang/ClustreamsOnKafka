@@ -49,7 +49,7 @@ object Clustream{
 
 class OnlineTask extends Runnable{
   override def run(): Unit = {
-    val inputTopic = "CluStreamTest0"
+    val inputTopic = "CluStreamTest1"
     val middleTopic = "CluSterAsPointTest0"
 
     val schemaRegistryUrl = "http://localhost:8081"
@@ -82,8 +82,9 @@ class OnlineTask extends Runnable{
     val Clu = new CluStreamOnline(20,3,10)
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
-      Clu.run(data)
+      println("=========================================================================Online print==================================================================================")
       println(Clu)
+      Clu.run(data)
     }
 
     val timerPool = Executors.newScheduledThreadPool(1)
@@ -130,17 +131,18 @@ class GloableOnlineTask extends Runnable {
 
     val inputData: KStream[String, McInfo] = builder.stream(inputTopic, Consumed.`with`(Serdes.String, McInfoSerde))
     //测试是否能取到数据
-    val data : KStream[String, McInfo] = inputData.peek{(k,v) =>
-      println("key is :" + k)
-      println("N is :" + v.getN)
-      println("Time is :" + v.getCf1t)
-    }
+//    val data : KStream[String, McInfo] = inputData.peek{(k,v) =>
+//      println("key is :" + k)
+//      println("N is :" + v.getN)
+//      println("Time is :" + v.getCf1t)
+//    }
     val Clu = new CluStreamOnline(10, 3, 10)
-    data.foreach { (k, v) =>
+    inputData.foreach { (k, v) =>
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 
-      Clu.globalrun(data, v)
+      println("-------------------------------------------------------------------------Gloable print----------------------------------------------------------------------------------")
       println(Clu)
+      Clu.globalrun(data, v)
     }
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
 
@@ -165,10 +167,12 @@ class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properti
     }
 
     if(hasAnypoint){
+      println("*************************************************************************Send to Middle Topic**********************************************************************************")
       println("before Time:"+cluOnline.getCurrentTime)
       cluOnline.sendClustersToTopic(topicName,schemaRegistryUrl,producerProperties)
       cluOnline.initRandom
       println("after Time:"+cluOnline.getCurrentTime)
+      println("*************************************************************************Send to Middle Topic END**********************************************************************************")
     }
   }
 }

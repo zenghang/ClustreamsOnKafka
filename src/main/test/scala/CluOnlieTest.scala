@@ -6,8 +6,9 @@ class CluOnlieTest {
   @Test
   def TestUpdate: Unit ={
     val Clu = new CluStreamOnline(20,3,10)
-    val data = Vector(Array(1.0,2.0,3.0))
-    Clu.run(data)
+    val data1 = Vector(Array(1.0,2.0,3.0))
+    val data2 = Vector("".split("，").map(_.toDouble))
+    Clu.run(data2)
   }
 
 }

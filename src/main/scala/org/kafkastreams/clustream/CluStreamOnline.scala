@@ -81,7 +81,9 @@ class CluStreamOnline(
       initialClusters(minIndex).setCf1x(initialClusters(minIndex).getCf1x:+point)
       initialClusters(minIndex).n += 1
       initialClusters(minIndex).setCenter(initialClusters(minIndex).getCf1x / initialClusters(minIndex).n.toDouble)
-    }else{
+      initNum += 1
+    }
+    if(initNum == minInitPoints){
       //将minInitPoints个点后得到的中心赋值给microClusters的中心用作初始化
       this.time = 0L
       var i =1;

@@ -53,7 +53,7 @@ class CluStreamOnline(
     *
     * @param point
     */
-  private def initKmeans(point:Vector[Double]):Unit = {
+  def initKmeans(point:Vector[Double]):Unit = {
     if(sendClusterToTopic){
       microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
       initialClusters = Array.fill(q)(new StreamingkmeansModel(Vector.fill[Double](numDimensions)(0.0),1))

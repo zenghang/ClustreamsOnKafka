@@ -41,21 +41,59 @@ class CluStreamOnline(
 
   private var time:Long = 0L
   private var N: Long = 0L
-  private var currentN: Long = 0L
+  private var initNum: Int = 0
 
   private var microClusters: Array[MicroCluster] = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
 
 
   var initialized = false
-
-  private var initArr: Array[Vector[Double]] = Array()
-
+  var sendClusterToTopic = false
+  private var initialClusters : Array[StreamingkmeansModel] = Array.fill(q)(new StreamingkmeansModel(Vector.fill[Double](numDimensions)(0.0),1))
   /**
     *
-    * @param kStreamData
+    * @param point
     */
-  private def initKmeans(kStreamData: KStream[String,Vector[Double]]):Unit = {
-
+  private def initKmeans(point:Vector[Double]):Unit = {
+    if(sendClusterToTopic){
+      microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
+      initialClusters = Array.fill(q)(new StreamingkmeansModel(Vector.fill[Double](numDimensions)(0.0),1))
+      initNum = 0;
+      sendClusterToTopic = false
+    }
+    //1.前q个点用来初始化(最开始选的q个中心点)
+    if(initNum < q){
+      initialClusters(initNum).setCf1x(point)
+      initNum += 1
+    }
+    else if(initNum < minInitPoints){
+      //1.计算point到每个中心点
+      var minDist = Double.PositiveInfinity
+      var minIndex = 0
+      for(i <- microClusters.length){
+        val dist = squaredDistance(initialClusters(i).getCenter, point)
+        if (dist < minDist) {
+          minDist = dist
+          minIndex = i
+        }
+      }
+      //2.更新新的中心点
+      initialClusters(minIndex).setCf1x(initialClusters(minIndex).getCf1x:+point)
+      initialClusters(minIndex).n += 1
+      initialClusters(minIndex).setCenter(initialClusters(minIndex).getCf1x / initialClusters(minIndex).n.toDouble)
+    }else{
+      //将minInitPoints个点后得到的中心赋值给microClusters的中心用作初始化
+      this.time = 0L
+      var i =1;
+      for(mc <- microClusters){
+        mc.setCenter(initialClusters(i-1).getCenter)
+        mc.setIds(Array(i))
+        i+=1
+      }
+      for(mc <- microClusters){
+        mc.setRmsd(distanceNearestMC(mc.center, microClusters))
+      }
+      initialized = true
+    }
   }
 
   /**
@@ -65,7 +103,10 @@ class CluStreamOnline(
    def initRandom = {
     this.time = 0L
     var i =1;
-     microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
+     if(sendClusterToTopic){
+       microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
+     }
+
     for(mc <- microClusters){
       mc.setCenter(Vector.fill[Double](numDimensions)(rand()))
       mc.setIds(Array(i))
@@ -311,6 +352,7 @@ class CluStreamOnline(
 
         mcProducer.send(new ProducerRecord[String,McInfo](topic,centroid,mcInfo))
 
+        sendClusterToTopic = true
         //打印信息测试用
         println(mc.toString)
       }
@@ -513,6 +555,31 @@ protected class MicroCluster(
       "Cf1t:  "+cf1t.toString+" || "+
       "Cf2t:  "+cf2t.toString+" || "+
       "Centroid:  "+center.toString+"\n"
+  }
+}
+protected class StreamingkmeansModel(var cf1x:Vector[Double],var n : Long)extends Serializable{
+  var center: Vector[Double] = cf1x :/ n.toDouble
+  def setCf1x(cf1x:Vector[Double]):Unit = {
+    this.cf1x = cf1x
+  }
+
+  def getCf1x: Vector[Double] = {
+    this.cf1x
+  }
+  def getCenter: Vector[Double] = {
+    this.center
+  }
+
+  def setCenter(center:Vector[Double]): Unit = {
+    this.center = center
+  }
+
+  def setN(n: Long): Unit = {
+    this.n = n
+  }
+
+  def getN: Long = {
+    this.n
   }
 }
 

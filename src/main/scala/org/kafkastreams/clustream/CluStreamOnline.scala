@@ -63,6 +63,7 @@ class CluStreamOnline(
     //1.前q个点用来初始化(最开始选的q个中心点)
     if(initNum < q){
       initialClusters(initNum).setCf1x(point)
+      initialClusters(initNum).setCenter(point)
       initNum += 1
     }
     else if(initNum < minInitPoints){

@@ -1,13 +1,15 @@
 package org.kafkastreams.clustream
 
+import java.io.{File, FileOutputStream, IOException, ObjectOutputStream}
+import java.nio.file.{Files, Paths}
 import java.util
+import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.atomic.AtomicLong
 import java.util.{Collections, Properties}
 
 import breeze.linalg._
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.streams.kstream.KStream
-import org.kafkastreams.implicits.KeyValueImplicits
-import breeze.stats.distributions.Gaussian
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -24,12 +26,6 @@ class CluStreamOnline(
   extends Serializable{
 
 
-  def timer[R](block: => R):R = {
-    val t0 = System.nanoTime()
-    val result = block//call-by-name
-    val t1 = System.nanoTime()
-    result
-  }
 
   //cluOnline类标记（测试用）
   private val Cluid : Double = rand()
@@ -40,6 +36,7 @@ class CluStreamOnline(
   private var recursiveOutliersRMSDCheck = true
 
   private var time:Long = 0L
+  private val gtime : AtomicLong = new AtomicLong(0)
   private var N: Long = 0L
   private var currentN: Long = 0L
 
@@ -108,6 +105,14 @@ class CluStreamOnline(
 
   def getCurrentTime: Long = {
     this.time
+  }
+
+  def getGlobalTime: Long = {
+    this.gtime.longValue()
+  }
+
+  def getAtomicGlobalTime: AtomicLong = {
+    this.gtime
   }
 
   def getTotalPoints: Long = {
@@ -273,7 +278,7 @@ class CluStreamOnline(
 
   private def ReplaceMicroCluster(point : Vector[Double],replacedID : Int,mcInfo:McInfo) : Unit = {
     microClusters(replacedID) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
-    microClusters(replacedID).addPoint(mcInfo)
+    microClusters(replacedID).addPoint(mcInfo,this.gtime)
     this.time += mcInfo.getN
     microClusters(replacedID).setCenter(point)
     microClusters(replacedID).setRmsd(distanceNearestMC(point, microClusters))
@@ -354,7 +359,7 @@ class CluStreamOnline(
     val minDistance = Math.sqrt(squaredDistance(nearestMC.getCenter, data))
     //如果在类簇半径范围内，则将点添加进去
     if(minDistance <= tFactor * nearestMC.rmsd) {
-      nearestMC.addPoint(mcInfo)
+      nearestMC.addPoint(mcInfo,this.gtime)
       this.time+=mcInfo.getN
       //打印此类簇（测试用）
       print(nearestMC)
@@ -376,6 +381,56 @@ class CluStreamOnline(
     }
 
   }
+
+
+  def saveSnapShotsToDisk(dir: String = "", tc: Long, alpha: Int = 2, l: Int = 2) : Unit = {
+    var write = false
+    var delete = false
+    var order = 0
+    val mcs = this.getMicroClusters
+
+
+    val exp = (scala.math.log(tc) / scala.math.log(alpha)).toInt
+
+    for (i <- 0 to exp) {
+      if (tc % scala.math.pow(alpha, i + 1) != 0 && tc % scala.math.pow(alpha, i) == 0) {
+        order = i
+        write = true
+      }
+    }
+
+    val tcBye = tc - ((scala.math.pow(alpha, l) + 1) * scala.math.pow(alpha, order + 1)).toInt
+
+    if (tcBye > 0) delete = true
+
+    if (write) {
+      val out = new ObjectOutputStream(new FileOutputStream(dir + "/" + tc))
+
+      try {
+        out.writeObject(mcs)
+        println("writted")
+      }
+      catch {
+        case ex: IOException => println("Exception while writing file " + ex)
+      }
+      finally {
+        out.close()
+      }
+    }
+
+    if (delete) {
+      try {
+        new File(dir + "/" + tcBye).delete()
+      }
+      catch {
+        case ex: IOException => println("Exception while deleting file " + ex);
+      }
+    }
+
+  }
+
+
+
   /**
     *
     * @define 测试用
@@ -386,135 +441,6 @@ class CluStreamOnline(
   }
 }
 
-/**
-  *
-  */
-private object MicroCluster extends Serializable {
-  private var current = -1
-
-  private def inc = {
-    current += 1
-    current
-  }
-}
-
-/**
-  *
-  * @param cf2x
-  * @param cf1x
-  * @param cf1t
-  * @param n
-  * @param ids
-  */
-protected class MicroCluster(
-                              var cf2x:Vector[Double],
-                              var cf1x:Vector[Double],
-                              var cf2t:Long,
-                              var cf1t:Long,
-                              var n:Long,
-                              var ids:Array[Int],
-                              var rmsd:Double= 0.0) extends Serializable{
-  var center: Vector[Double] = cf1x :/ n.toDouble
-
-  def this(cf2x:Vector[Double],cf1x:Vector[Double],cf2t:Long,cf1t:Long,n:Long) = this(cf2x,cf1x,cf2t,cf1t,n,Array(MicroCluster.inc))
-
-  def addPoint(point :Vector[Double],time:Long) : Unit = {
-    setCf1x(cf1x :+ point)
-    setCf2x(cf2x :+ (point :* point))
-    setCf1t(cf1t + time)
-    setCf2t(cf2t + time*time)
-    setN(n + 1L)
-    setCenter(cf1x :/ n.toDouble)
-    setRmsd(scala.math.sqrt(sum(this.cf2x) / this.n.toDouble - sum(this.cf1x.map(a => a * a)) / (this.n * this.n.toDouble)))
-  }
-  def addPoint(mcInfo:McInfo) : Unit = {
-    setCf1x(cf1x :+ Vector(mcInfo.getCf1x.split(",").map(_.toDouble)))
-    setCf2x(cf2x :+ Vector(mcInfo.getCf2x.split(",").map(_.toDouble)))
-    setCf1t(cf1t + mcInfo.getCf1t)
-    setCf2t(cf2t + mcInfo.getCf2t)
-    setN(n + mcInfo.getN)
-    setCenter(cf1x :/ n.toDouble)
-    setRmsd(scala.math.sqrt(sum(this.cf2x) / this.n.toDouble - sum(this.cf1x.map(a => a * a)) / (this.n * this.n.toDouble)))
-  }
-  def getMTimeStamp(mLastPoints :Int) = {
-    var mTimeStamp: Double = 0.0
-    val meanTimeStamp = if (n > 0) cf1t.toDouble / n.toDouble else 0
-    val sdTimeStamp = scala.math.sqrt(cf2t.toDouble / n.toDouble - meanTimeStamp * meanTimeStamp)
-
-    if (n < 2 * mLastPoints) mTimeStamp = meanTimeStamp
-    else mTimeStamp = Gaussian(meanTimeStamp, sdTimeStamp).icdf(1 - mLastPoints / (2 * n.toDouble))
-    mTimeStamp
-  }
-
-  def setCf2x(cf2x: Vector[Double]):Unit = {
-    this.cf2x = cf2x
-  }
-
-  def getCf2x:Vector[Double] = {
-    this.cf2x
-  }
-
-  def setCf1x(cf1x:Vector[Double]):Unit = {
-    this.cf1x = cf1x
-  }
-
-  def getCf1x: Vector[Double] = {
-    this.cf1x
-  }
-
-  def setCf2t(cf2t: Long): Unit = {
-    this.cf2t = cf2t
-  }
-
-  def getCf2t: Long = {
-    this.cf2t
-  }
-
-  def setCf1t(cf1t: Long): Unit = {
-    this.cf1t = cf1t
-  }
-
-  def getCf1t: Long = {
-    this.cf1t
-  }
-
-  def setN(n: Long): Unit = {
-    this.n = n
-  }
-
-  def getN: Long = {
-    this.n
-  }
-
-  def setIds(ids: Array[Int]): Unit = {
-    this.ids = ids
-  }
-
-  def getIds: Array[Int] = {
-    this.ids
-  }
-
-  def getCenter: Vector[Double] = {
-    this.center
-  }
-
-  def setCenter(center:Vector[Double]): Unit = {
-    this.center = center
-  }
-
-  def setRmsd(rmsd: Double): Unit = {
-    this.rmsd = rmsd
-  }
-
-  override def toString = {
-      "n:  "+n+" || "+
-      "Cf1x:  "+cf1x.toString+" || "+
-      "Cf2x:  "+cf2x.toString+" || "+
-      "Cf1t:  "+cf1t.toString+" || "+
-      "Cf2t:  "+cf2t.toString+" || "+
-      "Centroid:  "+center.toString+"\n"
-  }
-}
 
 
 

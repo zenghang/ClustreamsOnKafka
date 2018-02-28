@@ -1,6 +1,7 @@
 package org.kafkastreams.clustream
 
 import java.io.Serializable
+import java.nio.file.{Files, Paths}
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
@@ -22,10 +23,71 @@ import scala.util.control.Breaks
   * Created by 11245 on 2018/1/23.
   */
 class Clustream (
-                  val model:CluStreamOnline)
+                  val model:CluStreamOnline = new CluStreamOnline(10,3,10))
   extends Serializable{
 
-  def this() = this(null)
+  val schemaRegistryUrl = "http://localhost:8081"
+  val bootstrapServers = "localhost:9092"
+  val applicationServerPort = "localhost:8080"
+
+  val streamsConfiguration: Properties = {
+    val p = new Properties()
+    p.put(StreamsConfig.APPLICATION_ID_CONFIG, "CluStreamOnKStream-test1")
+    p.put(StreamsConfig.CLIENT_ID_CONFIG, "CluStreamOnKStream-test1-client")
+    p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+    p.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl)
+    p.put(StreamsConfig.APPLICATION_SERVER_CONFIG, applicationServerPort)
+    p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[SpecificAvroSerde[_ <: SpecificRecord]])
+    // The commit interval for flushing records to state stores and downstream must be lower than
+    // this integration test's timeout (30 secs) to ensure we observe the expected processing results.
+    p.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
+    p
+  }
+
+  def startOnline() : Unit = {
+    val inputTopic = "CluSterAsPointTest1"
+
+    val serdeConfig: util.Map[String, String] = Collections.singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl)
+    val McInfoSerde = new SpecificAvroSerde[McInfo]
+    McInfoSerde.configure(serdeConfig, false)
+    val builder: StreamsBuilder = new StreamsBuilder()
+
+    val inputData: KStream[String, McInfo] = builder.stream(inputTopic, Consumed.`with`(Serdes.String, McInfoSerde))
+
+    inputData.foreach { (k, v) =>
+
+      val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
+
+      println("-------------------------------------------------------------------------Global print----------------------------------------------------------------------------------")
+      println(model)
+      model.globalrun(data, v)
+    }
+34
+    val threadPool = Executors.newFixedThreadPool(2)
+    threadPool.submit(new OnlineTask)
+    val timePool = Executors.newScheduledThreadPool(1)
+    timePool.scheduleAtFixedRate(new ClockTask(model),20,20,TimeUnit.SECONDS)
+
+    val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
+
+    streams.cleanUp()
+    streams.start()
+  }
+
+  def getSnapShots(dir: String = "", tc: Long, h: Long): (Long,Long) = {
+
+    var tcReal = tc
+    while(!Files.exists(Paths.get(dir + "/" + tcReal)) && tcReal >= 0) tcReal = tcReal - 1
+    var tcH = tcReal - h
+    while(!Files.exists(Paths.get(dir + "/" + tcH)) && tcH >= 0) tcH = tcH - 1
+    if(tcH < 0) while(!Files.exists(Paths.get(dir + "/" + tcH))) tcH = tcH + 1
+
+    if(tcReal == -1L) tcH = -1L
+    (tcReal, tcH)
+  }
+
 
 
 }
@@ -50,7 +112,7 @@ object Clustream{
 class OnlineTask extends Runnable{
   override def run(): Unit = {
     val inputTopic = "CluStreamTest1"
-    val middleTopic = "CluSterAsPointTest0"
+    val middleTopic = "CluSterAsPointTest1"
 
     val schemaRegistryUrl = "http://localhost:8081"
     val bootstrapServers = "localhost:9092"
@@ -104,7 +166,7 @@ class OnlineTask extends Runnable{
 }
 class GloableOnlineTask extends Runnable {
   override def run(): Unit = {
-    val inputTopic = "CluSterAsPointTest0"
+    val inputTopic = "CluSterAsPointTest1"
     val schemaRegistryUrl = "http://localhost:8081"
     val bootstrapServers = "localhost:9092"
     val applicationServerPort = "localhost:8080"
@@ -140,10 +202,11 @@ class GloableOnlineTask extends Runnable {
     inputData.foreach { (k, v) =>
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 
-      println("-------------------------------------------------------------------------Gloable print----------------------------------------------------------------------------------")
+      println("-------------------------------------------------------------------------Global print----------------------------------------------------------------------------------")
       println(Clu)
       Clu.globalrun(data, v)
     }
+
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
 
     streams.cleanUp()
@@ -176,3 +239,11 @@ class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properti
     }
   }
 }
+
+class ClockTask(globalOnlineClu: CluStreamOnline) extends Runnable {
+  override def run(): Unit = {
+    val time = globalOnlineClu.getAtomicGlobalTime.incrementAndGet()
+    globalOnlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",time,2,2)
+  }
+}
+

@@ -142,6 +142,11 @@ class OnlineTask extends Runnable{
     val inputData : KStream[String,String] = builder.stream(inputTopic)
 
     val Clu = new CluStreamOnline(20,3,10)
+    //kmeans初始化放到这里
+    //    val Indata : KStream[String, McInfo] = inputData.peek{(k,v) =>
+    //      val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
+    //      Clu.initKmeans(data)
+    //    }
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
       println("=========================================================================Online print==================================================================================")
@@ -193,12 +198,13 @@ class GloableOnlineTask extends Runnable {
 
     val inputData: KStream[String, McInfo] = builder.stream(inputTopic, Consumed.`with`(Serdes.String, McInfoSerde))
     //测试是否能取到数据
-//    val data : KStream[String, McInfo] = inputData.peek{(k,v) =>
-//      println("key is :" + k)
-//      println("N is :" + v.getN)
-//      println("Time is :" + v.getCf1t)
-//    }
+
     val Clu = new CluStreamOnline(10, 3, 10)
+    //kmeans初始化放到这里
+//    val Indata : KStream[String, McInfo] = inputData.peek{(k,v) =>
+//      val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
+//      Clu.initKmeans(data)
+//    }
     inputData.foreach { (k, v) =>
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 

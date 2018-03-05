@@ -1,9 +1,10 @@
 import java.io._
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.{Executors, TimeUnit}
 
 import org.junit.Test
-import org.kafkastreams.clustream._
+import org.kafkastreams.clustream.{CluStreamOnline, _}
 import breeze.linalg._
 
 class CluOnlieTest {
@@ -46,13 +47,21 @@ class CluOnlieTest {
   def TestTime : Unit = {
     val Clu = new CluStreamOnline(20,3,10)
     val timerPool = Executors.newScheduledThreadPool(1)
-    timerPool.scheduleAtFixedRate(new ClockTask(Clu),1,1,TimeUnit.SECONDS)
+    timerPool.scheduleAtFixedRate(new ClockAndSaveTask(Clu),1,1,TimeUnit.SECONDS)
     while(true){
       Thread.sleep(1000)
       println(Clu.getGlobalTime)
     }
 //    Clu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",1,2,10)
   }
+
+  @Test
+  def TestTime2 : Unit = {
+    val time = new AtomicLong(1);
+    time.set(0);
+    println(time.longValue())
+  }
+
 
   @Test
   def TestOnline : Unit = {

@@ -68,7 +68,7 @@ class Clustream (
     val threadPool = Executors.newFixedThreadPool(2)
     threadPool.submit(new OnlineTask)
     val timePool = Executors.newScheduledThreadPool(1)
-    timePool.scheduleAtFixedRate(new ClockTask(model),20,20,TimeUnit.SECONDS)
+    timePool.scheduleAtFixedRate(new ClockAndSaveTask(model),20,20,TimeUnit.SECONDS)
 
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
 
@@ -254,8 +254,9 @@ class OnlineTask extends Runnable{
       Clu.run(data)
     }
 
-    val timerPool = Executors.newScheduledThreadPool(1)
+    val timerPool = Executors.newScheduledThreadPool(2)
     timerPool.scheduleAtFixedRate(new SendTask(Clu,produerProperties,schemaRegistryUrl,middleTopic),20,20,TimeUnit.SECONDS)
+    timerPool.scheduleAtFixedRate(new ClockTask(Clu),1,1,TimeUnit.SECONDS)
 
     val streams : KafkaStreams = new KafkaStreams(builder.build(),streamsConfiguration)
 
@@ -313,7 +314,7 @@ class GloableOnlineTask extends Runnable {
       Clu.globalrun(data, v)
     }
     val timePool = Executors.newScheduledThreadPool(1)
-    timePool.scheduleAtFixedRate(new ClockTask(Clu),20,20,TimeUnit.SECONDS)
+    timePool.scheduleAtFixedRate(new ClockAndSaveTask(Clu),20,20,TimeUnit.SECONDS)
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
 
     streams.cleanUp()
@@ -325,13 +326,17 @@ class GloableOnlineTask extends Runnable {
 
 class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properties,val schemaRegistryUrl:String,val topicName:String ) extends Runnable {
   override def run(): Unit = {
+
+    println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$Send Task has been called$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
     val hasAnypoint : Boolean = {
       val loop  = new Breaks
       var has = false
 
       loop.breakable(for (mc <- cluOnline.getMicroClusters){
-        if(mc.n != 0)
+        if(mc.n != 0){
           has = true
+          loop.break();
+        }
       })
       has
     }
@@ -340,17 +345,20 @@ class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properti
       println("*************************************************************************Send to Middle Topic**********************************************************************************")
       println("before Time:"+cluOnline.getCurrentTime)
       cluOnline.sendClustersToTopic(topicName,schemaRegistryUrl,producerProperties)
-      cluOnline.initRandom
       println("after Time:"+cluOnline.getCurrentTime)
       println("*************************************************************************Send to Middle Topic END**********************************************************************************")
     }
   }
 }
 
-class ClockTask(globalOnlineClu: CluStreamOnline) extends Runnable {
+class ClockAndSaveTask(globalOnlineClu: CluStreamOnline) extends Runnable {
   override def run(): Unit = {
     val time = globalOnlineClu.getAtomicGlobalTime.incrementAndGet()
-    globalOnlineClu.saveSnapShotsToDisk("/home/hadoop/clustream/snap",time,2,2)
+    globalOnlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",time,2,2)
   }
 }
 
+
+class ClockTask(onlineClu: CluStreamOnline) extends Runnable {
+  override def run() = onlineClu.getAtomicTime.incrementAndGet()
+}

@@ -27,11 +27,12 @@ class MicroCluster(
 
   def this(cf2x:Vector[Double],cf1x:Vector[Double],cf2t:Long,cf1t:Long,n:Long) = this(cf2x,cf1x,cf2t,cf1t,n,Array(MicroCluster.inc))
 
-  def addPoint(point :Vector[Double],time:Long) : Unit = {
+  def addPoint(point :Vector[Double],time:AtomicLong) : Unit = {
     setCf1x(cf1x :+ point)
     setCf2x(cf2x :+ (point :* point))
-    setCf1t(cf1t + time)
-    setCf2t(cf2t + time*time)
+    val currentTime = time.get()
+    setCf1t(cf1t + currentTime)
+    setCf2t(cf2t + currentTime*currentTime)
     setN(n + 1L)
     setCenter(cf1x :/ n.toDouble)
     setRmsd(scala.math.sqrt(sum(this.cf2x) / this.n.toDouble - sum(this.cf1x.map(a => a * a)) / (this.n * this.n.toDouble)))
@@ -40,7 +41,7 @@ class MicroCluster(
     setCf1x(cf1x :+ Vector(mcInfo.getCf1x.split(",").map(_.toDouble)))
     setCf2x(cf2x :+ Vector(mcInfo.getCf2x.split(",").map(_.toDouble)))
     //gtime在每次中间结果被发送时递增1
-    val currentTime = gtime.get()
+    val currentTime = gtime.longValue()
     setCf1t(cf1t + currentTime)
     setCf2t(cf2t + currentTime*currentTime)
     setN(n + mcInfo.getN)

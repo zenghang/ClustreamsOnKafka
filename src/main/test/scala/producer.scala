@@ -10,12 +10,13 @@ object Produceratatotopic {
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
       "org.apache.kafka.common.serialization.StringSerializer")
     val producer = new KafkaProducer[String, String](props)
+    var i :Int = 0;
     // Send some messages
     while(true) {
       (1 to messagesPerSec.toInt).foreach { messageNum =>
         val str = scala.util.Random.nextInt(50).toString +","+ scala.util.Random.nextInt(100).toString +","+ scala.util.Random.nextInt(50).toString
-        print(str)
-        println()
+        println(str+"---"+i)
+        i=i+1
         val message = new ProducerRecord[String, String]("CluStreamTest2", null, str)
         producer.send(message)
       }

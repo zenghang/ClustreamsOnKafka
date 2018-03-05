@@ -35,7 +35,7 @@ class CluStreamOnline(
   private var tFactor = 2.0
   private var recursiveOutliersRMSDCheck = true
 
-  private var time:Long = 0L
+  private val time : AtomicLong = new AtomicLong(0)
   private val gtime : AtomicLong = new AtomicLong(0)
   private var N: Long = 0L
   private var initNum: Int = 0
@@ -82,7 +82,7 @@ class CluStreamOnline(
     }
     if(initNum == minInitPoints){
       //将minInitPoints个点后得到的中心赋值给microClusters的中心用作初始化
-      this.time = 0L
+      this.time.set(0);
       var i =1;
       for(mc <- microClusters){
         mc.setCenter(initialClusters(i-1).getCenter)
@@ -101,12 +101,8 @@ class CluStreamOnline(
     *
     */
    def initRandom = {
-    this.time = 0L
-    var i =1;
-     if(sendClusterToTopic){
-       microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
-     }
-
+    this.time.set(0)
+    var i =1
     for(mc <- microClusters){
       mc.setCenter(Vector.fill[Double](numDimensions)(scala.util.Random.nextInt(100).toString.toDouble))
       mc.setIds(Array(i))
@@ -116,6 +112,7 @@ class CluStreamOnline(
       mc.setRmsd(distanceNearestMC(mc.center, microClusters))
     initialized = true
   }
+
 
   /**
     *
@@ -148,11 +145,15 @@ class CluStreamOnline(
   }
 
   def getCurrentTime: Long = {
-    this.time
+    this.time.longValue()
   }
 
   def getGlobalTime: Long = {
     this.gtime.longValue()
+  }
+
+  def getAtomicTime: AtomicLong = {
+    this.time
   }
 
   def getAtomicGlobalTime: AtomicLong = {
@@ -276,7 +277,7 @@ class CluStreamOnline(
     */
   private def markDeleteMicroCluster() : Int = {
     var DeletedIndex = -1
-    val recencyThreshold = this.time - delta
+    val recencyThreshold = this.time.longValue() - delta
     for(i <- 0 until q){
       if (microClusters(i).getMTimeStamp(mLastPoints) < recencyThreshold || microClusters(i).getN == 0){
         return i
@@ -313,7 +314,6 @@ class CluStreamOnline(
   private def ReplaceMicroCluster(point : Vector[Double],replacedID : Int) : Int = {
     microClusters(replacedID) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
     microClusters(replacedID).addPoint(point,this.time)
-    this.time += 1L
     microClusters(replacedID).setCenter(point)
     microClusters(replacedID).setRmsd(distanceNearestMC(point, microClusters))
 
@@ -323,7 +323,6 @@ class CluStreamOnline(
   private def ReplaceMicroCluster(point : Vector[Double],replacedID : Int,mcInfo:McInfo) : Unit = {
     microClusters(replacedID) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
     microClusters(replacedID).addPoint(mcInfo,this.gtime)
-    this.time += mcInfo.getN
     microClusters(replacedID).setCenter(point)
     microClusters(replacedID).setRmsd(distanceNearestMC(point, microClusters))
 
@@ -358,11 +357,21 @@ class CluStreamOnline(
         val cf2xString : String = arrayToString(mc.cf2x.toArray)
         val mcInfo : McInfo =  new McInfo(mc.n,cf1xString,cf2xString,mc.cf1t,mc.cf2t)
 
+        //打印信息测试用
+        println(mc.toString)
+
+        //立即初始化单个类簇
+        mc.setN(0);
+        mc.setCf1x(Vector.fill[Double](numDimensions)(0.0))
+        mc.setCf2x(Vector.fill[Double](numDimensions)(0.0))
+        mc.setCf1t(0)
+        mc.setCf2t(0)
+
+
         mcProducer.send(new ProducerRecord[String,McInfo](topic,centroid,mcInfo))
 
         sendClusterToTopic = true
-        //打印信息测试用
-        println(mc.toString)
+
       }
     }
   }
@@ -377,7 +386,6 @@ class CluStreamOnline(
         //如果在类簇半径范围内，则将点添加进去
         if(minDistance <= tFactor * nearestMC.rmsd) {
           nearestMC.addPoint(value,this.time)
-          this.time += 1L
           //打印此类簇（测试用）
           //print(nearestMC)
         }
@@ -405,7 +413,6 @@ class CluStreamOnline(
     //如果在类簇半径范围内，则将点添加进去
     if(minDistance <= tFactor * nearestMC.rmsd) {
       nearestMC.addPoint(mcInfo,this.gtime)
-      this.time+=mcInfo.getN
       //打印此类簇（测试用）
       //print(nearestMC)
     }else{
@@ -433,11 +440,11 @@ class CluStreamOnline(
     var delete = false
     var order = 0
     val mcs = this.getMicroClusters
-    println("===========================================================OnlineResult-begin============================================================")
-    for (mc:MicroCluster <- mcs){
-      print(mc)
-    }
-    println("===========================================================OnlineResult-end=================================================================")
+//    println("===========================================================OnlineResult-begin============================================================")
+//    for (mc:MicroCluster <- mcs){
+//      print(mc)
+//    }
+//    println("===========================================================OnlineResult-end=================================================================")
     val exp = (scala.math.log(tc) / scala.math.log(alpha)).toInt
 
     for (i <- 0 to exp) {

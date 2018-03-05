@@ -1,6 +1,6 @@
 package org.kafkastreams.clustream
 
-import java.io.Serializable
+import java.io.{FileInputStream, IOException, ObjectInputStream, Serializable}
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.{Collections, Properties}
@@ -37,7 +37,7 @@ class Clustream (
     p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     p.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl)
     p.put(StreamsConfig.APPLICATION_SERVER_CONFIG, applicationServerPort)
-    p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    //p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
     p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[SpecificAvroSerde[_ <: SpecificRecord]])
     // The commit interval for flushing records to state stores and downstream must be lower than
@@ -61,10 +61,10 @@ class Clustream (
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 
       println("-------------------------------------------------------------------------Global print----------------------------------------------------------------------------------")
-      println(model)
+      println(v.getCf1x)
       model.globalrun(data, v)
     }
-34
+
     val threadPool = Executors.newFixedThreadPool(2)
     threadPool.submit(new OnlineTask)
     val timePool = Executors.newScheduledThreadPool(1)
@@ -75,6 +75,7 @@ class Clustream (
     streams.cleanUp()
     streams.start()
   }
+
 
   def getSnapShots(dir: String = "", tc: Long, h: Long): (Long,Long) = {
 
@@ -88,6 +89,104 @@ class Clustream (
     (tcReal, tcH)
   }
 
+  def getMCsFromSnapshots(dir: String = "", tc: Long, h: Long): Array[MicroCluster] = {
+    val (t1,t2) = getSnapShots(dir,tc,h)
+
+    try{
+      val in1 = new ObjectInputStream(new FileInputStream(dir + "/" + t1))
+      val snap1 = in1.readObject().asInstanceOf[Array[MicroCluster]]
+
+      val in2 = new ObjectInputStream(new FileInputStream(dir + "/" + t2))
+      val snap2 = in2.readObject().asInstanceOf[Array[MicroCluster]]
+
+      in2.close()
+      in1.close()
+
+      val arrs1 = snap1.map(_.getIds)
+      val arrs2 = snap2.map(_.getIds)
+
+      val relatingMCs = snap1 zip arrs1.map(a => arrs2.zipWithIndex.map(b=> if(b._1.toSet.intersect(a.toSet).nonEmpty) b._2;else -1))
+      relatingMCs.map{ mc =>
+        if (!mc._2.forall(_ == -1) && t1 - h  >= t2) {
+          for(id <- mc._2) if(id != -1) {
+            mc._1.setCf2x(mc._1.getCf2x :- snap2(id).getCf2x)
+            mc._1.setCf1x(mc._1.getCf1x :- snap2(id).getCf1x)
+            mc._1.setCf2t(mc._1.getCf2t - snap2(id).getCf2t)
+            mc._1.setCf1t(mc._1.getCf1t - snap2(id).getCf1t)
+            mc._1.setN(mc._1.getN - snap2(id).getN)
+            mc._1.setIds(mc._1.getIds.toSet.diff(snap2(id).getIds.toSet).toArray)
+          }
+          mc._1
+        }else mc._1
+
+      }
+    }
+    catch{
+      case ex: IOException => println("Exception while reading files " + ex)
+        null
+    }
+
+  }
+
+  private def sample[A](dist: Map[A, Double]): A = {
+    val p = scala.util.Random.nextDouble
+    val it = dist.iterator
+    var accum = 0.0
+    while (it.hasNext) {
+      val (item, itemProb) = it.next
+      accum += itemProb
+      if (accum >= p)
+        return item
+    }
+    sys.error(f"this should never happen") // needed so it will compile
+  }
+  def getCentersFromMC(mcs: Array[MicroCluster]): Array[Vector[Double]] = {
+    mcs.filter(_.getN > 0).map(mc => mc.getCf1x :/ mc.getN.toDouble)
+  }
+
+  def getWeightsFromMC(mcs: Array[MicroCluster]): Array[Double] = {
+    val arr: Array[Double] = mcs.map(_.getN.toDouble).filter(_ > 0)
+    val sum: Double = arr.sum
+    arr.map(value => value/sum)
+  }
+
+
+  def fakeKMeans(k:Int,numPoints:Int,mcs: Array[MicroCluster],numDimensions:Int): Array[kmeansModel] ={
+    val Clusters : Array[kmeansModel]= Array.fill(k)(new kmeansModel(Vector.fill[Double](numDimensions)(0.0),0))
+    val centers = getCentersFromMC(mcs)
+
+    for (i <- 0 until k){
+      Clusters(i).setCenter(centers(i))
+    }
+    val weights = getWeightsFromMC(mcs)
+    val map = (centers zip weights).toMap
+    val points = Array.fill(numPoints)(sample(map))
+    var repetitions = 10
+    while (repetitions >=0){
+      for (point <- points){
+        //Assign points to Clusters
+        var minDistance = squaredDistance(point,Clusters(0).getCenter)
+        var closestCluster = 0
+        var len = mcs.length
+        for (i <- 1 until Clusters.length){
+          val distance = squaredDistance(point,Clusters(i).getCenter)
+          if (distance < minDistance){
+            closestCluster = i
+            minDistance = distance
+          }
+        }
+        //将点加进去
+        Clusters(closestCluster).setCf1x(Clusters(closestCluster).getCf1x:+point)
+        Clusters(closestCluster).n += 1
+      }
+      //Calculate new centers
+      for (i <- 0 until  Clusters.length){
+        Clusters(i).setCenter(Clusters(i).getCf1x / Clusters(i).n.toDouble)
+      }
+      repetitions -= 1
+    }
+    Clusters
+  }
 
 
 }
@@ -104,14 +203,14 @@ object Clustream{
       threadPool.submit(new OnlineTask)
     }
     threadPool2.submit(new GloableOnlineTask)
-
   }
 }
 
 
 class OnlineTask extends Runnable{
   override def run(): Unit = {
-    val inputTopic = "CluStreamTest1"
+    val inputTopic = "CluStreamTest2"
+    //val inputTopic = "dataset"
     val middleTopic = "CluSterAsPointTest1"
 
     val schemaRegistryUrl = "http://localhost:8081"
@@ -123,6 +222,7 @@ class OnlineTask extends Runnable{
       p.put(StreamsConfig.APPLICATION_ID_CONFIG, "CluStreamOnKStream-test0")
       p.put(StreamsConfig.CLIENT_ID_CONFIG, "CluStreamOnKStream-test-client")
       p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+      p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       // The commit interval for flushing records to state stores and downstream must be lower than
@@ -150,7 +250,7 @@ class OnlineTask extends Runnable{
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
       println("=========================================================================Online print==================================================================================")
-      println(Clu)
+      println(data)
       Clu.run(data)
     }
 
@@ -182,7 +282,7 @@ class GloableOnlineTask extends Runnable {
       p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
       p.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl)
       p.put(StreamsConfig.APPLICATION_SERVER_CONFIG, applicationServerPort)
-      p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+      //p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[SpecificAvroSerde[_ <: SpecificRecord]])
       // The commit interval for flushing records to state stores and downstream must be lower than
@@ -209,10 +309,11 @@ class GloableOnlineTask extends Runnable {
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 
       println("-------------------------------------------------------------------------Global print----------------------------------------------------------------------------------")
-      println(Clu)
+      println(k+"  "+v.getN)
       Clu.globalrun(data, v)
     }
-
+    val timePool = Executors.newScheduledThreadPool(1)
+    timePool.scheduleAtFixedRate(new ClockTask(Clu),20,20,TimeUnit.SECONDS)
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
 
     streams.cleanUp()
@@ -249,7 +350,7 @@ class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properti
 class ClockTask(globalOnlineClu: CluStreamOnline) extends Runnable {
   override def run(): Unit = {
     val time = globalOnlineClu.getAtomicGlobalTime.incrementAndGet()
-    globalOnlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",time,2,2)
+    globalOnlineClu.saveSnapShotsToDisk("/home/hadoop/clustream/snap",time,2,2)
   }
 }
 

@@ -45,7 +45,7 @@ class CluStreamOnline(
 
   var initialized = false
   var sendClusterToTopic = false
-  private var initialClusters : Array[StreamingkmeansModel] = Array.fill(q)(new StreamingkmeansModel(Vector.fill[Double](numDimensions)(0.0),1))
+  private var initialClusters : Array[kmeansModel] = Array.fill(q)(new kmeansModel(Vector.fill[Double](numDimensions)(0.0),1))
   /**
     *
     * @param point
@@ -53,7 +53,7 @@ class CluStreamOnline(
   def initKmeans(point:Vector[Double]):Unit = {
     if(sendClusterToTopic){
       microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
-      initialClusters = Array.fill(q)(new StreamingkmeansModel(Vector.fill[Double](numDimensions)(0.0),1))
+      initialClusters = Array.fill(q)(new kmeansModel(Vector.fill[Double](numDimensions)(0.0),1))
       initNum = 0;
       sendClusterToTopic = false
     }
@@ -67,7 +67,7 @@ class CluStreamOnline(
       //1.计算point到每个中心点
       var minDist = Double.PositiveInfinity
       var minIndex = 0
-      for(i <- microClusters.length){
+      for(i <- 0 until microClusters.length - 1){
         val dist = squaredDistance(initialClusters(i).getCenter, point)
         if (dist < minDist) {
           minDist = dist
@@ -108,7 +108,7 @@ class CluStreamOnline(
      }
 
     for(mc <- microClusters){
-      mc.setCenter(Vector.fill[Double](numDimensions)(rand()))
+      mc.setCenter(Vector.fill[Double](numDimensions)(scala.util.Random.nextInt(100).toString.toDouble))
       mc.setIds(Array(i))
       i+=1
     }
@@ -379,7 +379,7 @@ class CluStreamOnline(
           nearestMC.addPoint(value,this.time)
           this.time += 1L
           //打印此类簇（测试用）
-          print(nearestMC)
+          //print(nearestMC)
         }
         else {
           //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
@@ -390,11 +390,11 @@ class CluStreamOnline(
             val MergedIndex : Int = markAndMergeMicroCluster
             ReplaceMicroCluster(value,MergedIndex)
             //打印类簇（测试用）
-            print(microClusters(MergedIndex))
+            //print(microClusters(MergedIndex))
           }else{
             ReplaceMicroCluster(value,DeletedIndex)
             //打印类簇（测试用）
-            print(microClusters(DeletedIndex))
+            //print(microClusters(DeletedIndex))
           }
         }
   }
@@ -407,7 +407,7 @@ class CluStreamOnline(
       nearestMC.addPoint(mcInfo,this.gtime)
       this.time+=mcInfo.getN
       //打印此类簇（测试用）
-      print(nearestMC)
+      //print(nearestMC)
     }else{
       //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
       val DeletedIndex : Int = markDeleteMicroCluster
@@ -417,11 +417,11 @@ class CluStreamOnline(
         val MergedIndex : Int = markAndMergeMicroCluster()
         ReplaceMicroCluster(data,MergedIndex,mcInfo)
         //打印类簇（测试用）
-        print(microClusters(MergedIndex))
+        //print(microClusters(MergedIndex))
       }else{
         ReplaceMicroCluster(data,DeletedIndex,mcInfo)
         //打印类簇（测试用）
-        print(microClusters(DeletedIndex))
+        //print(microClusters(DeletedIndex))
       }
     }
 
@@ -433,8 +433,11 @@ class CluStreamOnline(
     var delete = false
     var order = 0
     val mcs = this.getMicroClusters
-
-
+    println("===========================================================OnlineResult-begin============================================================")
+    for (mc:MicroCluster <- mcs){
+      print(mc)
+    }
+    println("===========================================================OnlineResult-end=================================================================")
     val exp = (scala.math.log(tc) / scala.math.log(alpha)).toInt
 
     for (i <- 0 to exp) {
@@ -485,7 +488,7 @@ class CluStreamOnline(
     "CluID:" +  Cluid
   }
 }
-protected class StreamingkmeansModel(var cf1x:Vector[Double],var n : Long)extends Serializable{
+protected class kmeansModel(var cf1x:Vector[Double],var n : Long)extends Serializable{
   var center: Vector[Double] = cf1x :/ n.toDouble
   def setCf1x(cf1x:Vector[Double]):Unit = {
     this.cf1x = cf1x

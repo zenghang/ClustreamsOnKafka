@@ -90,7 +90,7 @@ class CluStreamOnline(
         i+=1
       }
       for(mc <- microClusters){
-        mc.setRmsd(distanceNearestMC(mc.center, microClusters))
+        mc.setRmsd(distanceNearestMC(mc.center))
       }
       initialized = true
     }
@@ -102,14 +102,11 @@ class CluStreamOnline(
     */
    def initRandom = {
     this.time.set(0)
-    var i =1
     for(mc <- microClusters){
       mc.setCenter(Vector.fill[Double](numDimensions)(scala.util.Random.nextInt(100).toString.toDouble))
-      mc.setIds(Array(i))
-      i+=1
     }
     for(mc <- microClusters)
-      mc.setRmsd(distanceNearestMC(mc.center, microClusters))
+      mc.setRmsd(distanceNearestMC(mc.center))
     initialized = true
   }
 
@@ -187,14 +184,13 @@ class CluStreamOnline(
   /**
     *
     * @param vec
-    * @param mcs
     * @return
     */
-  private def distanceNearestMC(vec: Vector[Double], mcs: Array[MicroCluster]): Double = {
+  private def distanceNearestMC(vec: Vector[Double]): Double = {
 
     var minDist = Double.PositiveInfinity
     var i = 0
-    for (mc <- mcs) {
+    for (mc <- this.microClusters) {
       val dist = squaredDistance(vec, mc.getCenter)
       if (dist != 0.0 && dist < minDist) minDist = dist
       i += 1
@@ -315,7 +311,7 @@ class CluStreamOnline(
     microClusters(replacedID) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
     microClusters(replacedID).addPoint(point,this.time)
     microClusters(replacedID).setCenter(point)
-    microClusters(replacedID).setRmsd(distanceNearestMC(point, microClusters))
+    microClusters(replacedID).setRmsd(distanceNearestMC(point))
 
     replacedID
   }
@@ -324,7 +320,7 @@ class CluStreamOnline(
     microClusters(replacedID) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
     microClusters(replacedID).addPoint(mcInfo,this.gtime)
     microClusters(replacedID).setCenter(point)
-    microClusters(replacedID).setRmsd(distanceNearestMC(point, microClusters))
+    microClusters(replacedID).setRmsd(distanceNearestMC(point))
 
   }
 
@@ -391,18 +387,17 @@ class CluStreamOnline(
         }
         else {
           //2.查找是否有符合删除条件的类簇，如果有则删除并以数据点为中心新建一个类簇替换
-          val DeletedIndex : Int = markDeleteMicroCluster
+          val DeletedIndex : Int = markDeleteMicroCluster()
 
           //3.如果没有可删除的类簇，则进行合并，然后以数据点为中心新建一个类簇
           if(DeletedIndex == -1) {
-            val MergedIndex : Int = markAndMergeMicroCluster
+
+            val MergedIndex : Int = markAndMergeMicroCluster()
             ReplaceMicroCluster(value,MergedIndex)
-            //打印类簇（测试用）
-            //print(microClusters(MergedIndex))
+
           }else{
             ReplaceMicroCluster(value,DeletedIndex)
-            //打印类簇（测试用）
-            //print(microClusters(DeletedIndex))
+
           }
         }
   }
@@ -435,7 +430,7 @@ class CluStreamOnline(
   }
 
 
-  def saveSnapShotsToDisk(dir: String = "", tc: Long, alpha: Int = 2, l: Int = 2) : Unit = {
+  def saveSnapShotsToDisk(dir: String = "", tc: Long, alpha: Int = 2, l: Int = 3) : Unit = {
     var write = false
     var delete = false
     var order = 0

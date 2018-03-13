@@ -2,7 +2,7 @@ import java.util.HashMap
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 object Produceratatotopic {
   def main(args: Array[String]): Unit = {
-    val messagesPerSec = 3
+    val messagesPerSec = 5000
     val props = new HashMap[String, Object]()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -17,8 +17,11 @@ object Produceratatotopic {
         val str = scala.util.Random.nextInt(50).toString +","+ scala.util.Random.nextInt(100).toString +","+ scala.util.Random.nextInt(50).toString
         println(str+"---"+i)
         i=i+1
-        val message = new ProducerRecord[String, String]("CluStreamTest2", null, str)
-        producer.send(message)
+//        val message = new ProducerRecord[String, String]("CluStreamTest1", null, str)
+//        producer.send(message)
+
+        val message2 = new ProducerRecord[String, String]("CluStreamTest2", null, str)
+        producer.send(message2)
       }
       Thread.sleep(1000)
     }

@@ -30,7 +30,7 @@ class CluStreamOnline(
   //cluOnline类标记（测试用）
   private val Cluid : Double = rand()
 
-  private var mLastPoints = 500
+  private var mLastPoints = 200
   private var delta = 20
   private var tFactor = 2.0
   private var recursiveOutliersRMSDCheck = true
@@ -275,7 +275,7 @@ class CluStreamOnline(
     var DeletedIndex = -1
     val recencyThreshold = this.time.longValue() - delta
     for(i <- 0 until q){
-      if (microClusters(i).getMTimeStamp(mLastPoints) < recencyThreshold || microClusters(i).getN == 0){
+      if (microClusters(i).getN == 0 || microClusters(i).getMTimeStamp(mLastPoints) < recencyThreshold ){
         return i
       }
     }
@@ -317,7 +317,7 @@ class CluStreamOnline(
   }
 
   private def ReplaceMicroCluster(point : Vector[Double],replacedID : Int,mcInfo:McInfo) : Unit = {
-    microClusters(replacedID) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0),0L,0L,0L)
+    microClusters(replacedID) = new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0))
     microClusters(replacedID).addPoint(mcInfo,this.gtime)
     microClusters(replacedID).setCenter(point)
     microClusters(replacedID).setRmsd(distanceNearestMC(point))
@@ -458,7 +458,7 @@ class CluStreamOnline(
 
       try {
         out.writeObject(mcs)
-        println("writted")
+        println("written")
       }
       catch {
         case ex: IOException => println("Exception while writing file " + ex)

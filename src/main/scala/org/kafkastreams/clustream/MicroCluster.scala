@@ -26,6 +26,7 @@ class MicroCluster(
   var center: Vector[Double] = cf1x :/ n.toDouble
 
   def this(cf2x:Vector[Double],cf1x:Vector[Double],cf2t:Long,cf1t:Long,n:Long) = this(cf2x,cf1x,cf2t,cf1t,n,Array(MicroCluster.inc))
+  def this(cf2x:Vector[Double],cf1x:Vector[Double]) = this(cf2x,cf1x,0,0,0,Array(MicroCluster.globalInc))
 
   def addPoint(point :Vector[Double],time:AtomicLong) : Unit = {
     setCf1x(cf1x :+ point)
@@ -119,21 +120,28 @@ class MicroCluster(
   }
 
   override def toString = {
-    "n:  "+n+" || "+
+      "n:  "+n+" || "+
       "Cf1x:  "+cf1x.toString+" || "+
       "Cf2x:  "+cf2x.toString+" || "+
       "Cf1t:  "+cf1t.toString+" || "+
       "Cf2t:  "+cf2t.toString+" || "+
-      "Centroid:  "+center.toString+"\n"
+      "Centroid:  "+center.toString+" || "+
+      "Ids:  "+ ids.mkString("{",",","}") + "\n"
   }
 }
 
 private object MicroCluster extends Serializable {
   private var current = -1
+  private var globalCurrent = 9
 
   private def inc = {
     current += 1
     current
+  }
+
+  private def globalInc = {
+    globalCurrent += 1
+    globalCurrent
   }
 }
 

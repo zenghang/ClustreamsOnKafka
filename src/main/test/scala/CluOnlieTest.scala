@@ -11,37 +11,49 @@ class CluOnlieTest {
   @Test
   def TestgetSnaps: Unit ={
     val Clu : Clustream = new Clustream()
-    val snapsPath = "/Users/hu/KStream/snaps2"
-    println(Clu.getSnapShots(snapsPath,21,20))
-    val snap1 = Clu.getMCsFromSnapshots(snapsPath,21,20)
+    val snapsPath = "/home/hadoop/clustream/snap"
+    println(Clu.getSnapShots(snapsPath,17,15))
+    val snap1 = Clu.getMCsFromSnapshots(snapsPath,17,15)
     println(snap1.map(a => a.getN).mkString("[",",","]"))
     println("mics points = " + snap1.map(_.getN).sum)
-    val clusters1 = Clu.fakeKMeans(4,10,snap1,3)
+    val clusters1 = Clu.fakeKMeans(5,6030,snap1,3)
     if(clusters1 != null) {
       println("MacroClusters Ceneters")
-      println("snapshots " + Clu.getSnapShots(snapsPath,21,20))
+      println("snapshots " + Clu.getSnapShots(snapsPath,17,15))
       for (i <- 0 until clusters1.length){
         println("Cf1:"+clusters1(i).cf1x+"  N:"+clusters1(i).getN+"  Center:"+clusters1(i).getCenter)
       }
     }
-    for(i <- 1 to 21) {
-        if(Files.exists(Paths.get(snapsPath+ "/" + i)))
-        try {
-          val file = new ObjectInputStream(new FileInputStream(snapsPath + "/" + i))
-          val mc = file.readObject().asInstanceOf[Array[MicroCluster]]
-          var text: Array[String] = null
-          file.close()
-          if(mc != null) {
-            mc.foreach(a => println(a.toString))
-          }
-          println("==========================================================================================================================================")
 
+    //    for(i <- 2 until  12) {
+    if(Files.exists(Paths.get(snapsPath+ "/" + 14)))
+      try {
+        val file = new ObjectInputStream(new FileInputStream(snapsPath + "/" + 14))
+        val mc = file.readObject().asInstanceOf[Array[MicroCluster]]
+        println(mc.map(a => a.getN).mkString("[",",","]"))
+        println("mics points = " + snap1.map(_.getN).sum)
+        var sq = 0.0
+        for (mc <- snap1){
+          val part1 = Clu.sumVector(mc.cf2x)
+          val part2 = mc.n*Clu.sumVector(mc.getCenter :* mc.getCenter)
+          val part3 = 2*Clu.sumVector(mc.getCenter :* mc.cf1x)
+          val sum = part1 + part2 - part3
+          sq = sq + sum
         }
-        catch {
-          case ex: IOException => println("Exception while reading files " + ex)
-            null
+
+        file.close()
+        if(mc != null) {
+          mc.foreach(a => println(a.toString))
         }
+        println("The Quality is :"+sq)
+        println("==========================================================================================================================================")
+
       }
+      catch {
+        case ex: IOException => println("Exception while reading files " + ex)
+          null
+      }
+    //      }
   }
 
   @Test
@@ -53,7 +65,7 @@ class CluOnlieTest {
       Thread.sleep(1000)
       println(Clu.getGlobalTime)
     }
-//    Clu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",1,2,10)
+    //    Clu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",1,2,10)
   }
 
   @Test
@@ -73,6 +85,7 @@ class CluOnlieTest {
 
     }
   }
+
 }
 
 

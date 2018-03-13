@@ -62,12 +62,12 @@ class Clustream (
       model.globalrun(data, v)
     }
 
-    val numThread = 5
-    val threadPool = Executors.newFixedThreadPool(5)
+    val numThread = 1
+    val threadPool = Executors.newFixedThreadPool(numThread)
     for(i<-1 to numThread)
       threadPool.submit(new OnlineTask)
     val timePool = Executors.newScheduledThreadPool(1)
-    timePool.scheduleAtFixedRate(new ClockAndSaveTask(model),20,20,TimeUnit.SECONDS)
+    timePool.scheduleAtFixedRate(new ClockAndSaveTask(model),22,20,TimeUnit.SECONDS)
 
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
 
@@ -187,6 +187,15 @@ class Clustream (
     Clusters
   }
 
+  def sumVector(vector: Vector[Double]):Double = {
+    var sum = 0.0
+    val dArr =  vector.toArray
+    for (cf2x <- dArr){
+      sum = sum + cf2x
+    }
+    sum
+  }
+
 
 }
 
@@ -194,7 +203,6 @@ object Clustream{
   def main(args: Array[String]): Unit = {
     val inputTopic = "CluStreamTest2"
     //val inputTopic = "dataset"
-    val middleTopic = "CluSterAsPointTest1"
 
     val schemaRegistryUrl = "http://localhost:8081"
     val bootstrapServers = "localhost:9092"
@@ -205,7 +213,7 @@ object Clustream{
       p.put(StreamsConfig.APPLICATION_ID_CONFIG, "CluStreamOnKStream-test0")
       p.put(StreamsConfig.CLIENT_ID_CONFIG, "CluStreamOnKStream-test-client")
       p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-      p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+      //p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       // The commit interval for flushing records to state stores and downstream must be lower than
@@ -224,12 +232,12 @@ object Clustream{
 
     val inputData : KStream[String,String] = builder.stream(inputTopic)
 
-    val Clu = new CluStreamOnline(20,3,10)
+    val Clu = new CluStreamOnline(10,3,10)
 
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
-      println("=========================================================================Online print==================================================================================")
-      println(data)
+//      println("=========================================================================Online print==================================================================================")
+//      println(data)
       Clu.run(data)
     }
 
@@ -248,7 +256,7 @@ object Clustream{
 
 class OnlineTask extends Runnable{
   override def run(): Unit = {
-    val inputTopic = "CluStreamTest2"
+    val inputTopic = "CluStreamTest1"
     //val inputTopic = "dataset"
     val middleTopic = "CluSterAsPointTest1"
 
@@ -289,8 +297,6 @@ class OnlineTask extends Runnable{
     //    }
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
-      println("=========================================================================Online print==================================================================================")
-      println(data)
       Clu.run(data)
     }
 
@@ -310,7 +316,6 @@ class OnlineTask extends Runnable{
 class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properties,val schemaRegistryUrl:String,val topicName:String ) extends Runnable {
   override def run(): Unit = {
 
-//    println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$Send Task has been called$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
     val hasAnypoint : Boolean = {
       val loop  = new Breaks
       var has = false
@@ -337,7 +342,7 @@ class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properti
 class ClockAndSaveTask(globalOnlineClu: CluStreamOnline) extends Runnable {
   override def run(): Unit = {
     val time = globalOnlineClu.getAtomicGlobalTime.incrementAndGet()
-    globalOnlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",time,2,2)
+    globalOnlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",time,2,4)
   }
 }
 
@@ -350,6 +355,6 @@ class ClockTask(onlineClu: CluStreamOnline) extends Runnable {
 class SaveTask(onlineClu: CluStreamOnline) extends Runnable {
   override def run(): Unit = {
     val time = onlineClu.getCurrentTime
-    onlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps2",time,2,2)
+    onlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps2",time,2,4)
   }
 }

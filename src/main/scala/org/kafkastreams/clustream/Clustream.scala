@@ -20,7 +20,7 @@ import scala.util.control.Breaks
   * Created by 11245 on 2018/1/23.
   */
 class Clustream (
-                  val model:CluStreamOnline = new CluStreamOnline(10,3,10))
+                  val model:CluStreamOnline = new CluStreamOnline(10,3,10).setM(200))
   extends Serializable{
 
   val schemaRegistryUrl = "http://localhost:8081"
@@ -57,17 +57,17 @@ class Clustream (
 
       val data: Vector[Double] = Vector(k.split(",").map(_.toDouble))
 
-      println("-------------------------------------------------------------------------Global print----------------------------------------------------------------------------------")
-      println(v.getCf1x)
+//      println("-------------------------------------------------------------------------Global print----------------------------------------------------------------------------------")
+//      println(v.getCf1x)
       model.globalrun(data, v)
     }
 
-    val numThread = 1
+    val numThread = 3
     val threadPool = Executors.newFixedThreadPool(numThread)
     for(i<-1 to numThread)
       threadPool.submit(new OnlineTask)
     val timePool = Executors.newScheduledThreadPool(1)
-    timePool.scheduleAtFixedRate(new ClockAndSaveTask(model),22,20,TimeUnit.SECONDS)
+    timePool.scheduleAtFixedRate(new ClockAndSaveTask(model),10,10,TimeUnit.SECONDS)
 
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
 
@@ -181,6 +181,10 @@ class Clustream (
       //Calculate new centers
       for (i <- 0 until  Clusters.length){
         Clusters(i).setCenter(Clusters(i).getCf1x / Clusters(i).n.toDouble)
+        if(repetitions > 0){
+          Clusters(i).setN(0)
+          Clusters(i).setCf1x(Vector.fill[Double](numDimensions)(0.0))
+        }
       }
       repetitions -= 1
     }
@@ -201,7 +205,7 @@ class Clustream (
 
 object Clustream{
   def main(args: Array[String]): Unit = {
-    val inputTopic = "CluStreamTest2"
+    val inputTopic = "CluStreamTest3"
     //val inputTopic = "dataset"
 
     val schemaRegistryUrl = "http://localhost:8081"
@@ -232,7 +236,7 @@ object Clustream{
 
     val inputData : KStream[String,String] = builder.stream(inputTopic)
 
-    val Clu = new CluStreamOnline(10,3,10)
+    val Clu = new CluStreamOnline(10,3,1000)
 
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
@@ -243,7 +247,7 @@ object Clustream{
 
     val timerPool = Executors.newScheduledThreadPool(2)
     timerPool.scheduleAtFixedRate(new ClockTask(Clu),1,1,TimeUnit.SECONDS)
-    timerPool.scheduleAtFixedRate(new SaveTask(Clu),1,1,TimeUnit.SECONDS)
+    timerPool.scheduleAtFixedRate(new SaveTask(Clu),10,10,TimeUnit.SECONDS)
 
     val streams : KafkaStreams = new KafkaStreams(builder.build(),streamsConfiguration)
 
@@ -256,7 +260,7 @@ object Clustream{
 
 class OnlineTask extends Runnable{
   override def run(): Unit = {
-    val inputTopic = "CluStreamTest1"
+    val inputTopic = "CluStreamTest2"
     //val inputTopic = "dataset"
     val middleTopic = "CluSterAsPointTest1"
 
@@ -269,7 +273,7 @@ class OnlineTask extends Runnable{
       p.put(StreamsConfig.APPLICATION_ID_CONFIG, "CluStreamOnKStream-test0")
       p.put(StreamsConfig.CLIENT_ID_CONFIG, "CluStreamOnKStream-test-client")
       p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-      p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+      //p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
       // The commit interval for flushing records to state stores and downstream must be lower than
@@ -288,7 +292,7 @@ class OnlineTask extends Runnable{
 
     val inputData : KStream[String,String] = builder.stream(inputTopic)
 
-    val Clu = new CluStreamOnline(20,3,10)
+    val Clu = new CluStreamOnline(100,3,10)
 //    println(Clu.toString);
     //kmeans初始化放到这里
     //    val Indata : KStream[String, McInfo] = inputData.peek{(k,v) =>
@@ -297,11 +301,13 @@ class OnlineTask extends Runnable{
     //    }
     inputData.foreach{ (k,v) =>
       val data : Vector[Double]= Vector(v.split(",").map(_.toDouble))
+//      println("=========================================================================================")
+//      println(data)
       Clu.run(data)
     }
 
     val timerPool = Executors.newScheduledThreadPool(2)
-    timerPool.scheduleAtFixedRate(new SendTask(Clu,produerProperties,schemaRegistryUrl,middleTopic),20,20,TimeUnit.SECONDS)
+    timerPool.scheduleAtFixedRate(new SendTask(Clu,produerProperties,schemaRegistryUrl,middleTopic),10,10,TimeUnit.SECONDS)
     timerPool.scheduleAtFixedRate(new ClockTask(Clu),1,1,TimeUnit.SECONDS)
 
     val streams : KafkaStreams = new KafkaStreams(builder.build(),streamsConfiguration)
@@ -342,7 +348,7 @@ class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properti
 class ClockAndSaveTask(globalOnlineClu: CluStreamOnline) extends Runnable {
   override def run(): Unit = {
     val time = globalOnlineClu.getAtomicGlobalTime.incrementAndGet()
-    globalOnlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps",time,2,4)
+    globalOnlineClu.saveSnapShotsToDisk("/home/hadoop/clustream/snap",time,2,4)
   }
 }
 
@@ -355,6 +361,6 @@ class ClockTask(onlineClu: CluStreamOnline) extends Runnable {
 class SaveTask(onlineClu: CluStreamOnline) extends Runnable {
   override def run(): Unit = {
     val time = onlineClu.getCurrentTime
-    onlineClu.saveSnapShotsToDisk("/Users/hu/KStream/snaps2",time,2,4)
+    onlineClu.saveSnapShotsToDisk("/home/hadoop/clustream/snap1",time,2,4)
   }
 }

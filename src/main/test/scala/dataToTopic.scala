@@ -17,7 +17,7 @@ object dataToTopic {
     val producer = new KafkaProducer[String, String](props)
 
     val pointNum = 100000
-    val readPath = "/Users/hu/KStream/data.txt"
+    val readPath = "/home/hadoop/clustream/dataset/data.txt"
     val read: BufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(readPath)))
     var i = 0
     var num =1
@@ -32,7 +32,11 @@ object dataToTopic {
           point = read.readLine()
           if(point!=null){
             val message = new ProducerRecord[String, String]("CluStreamTest2", null, point)
-            producer.send(message)
+            val message1 = new ProducerRecord[String, String]("CluStreamTest1", null, point)
+            val message2 = new ProducerRecord[String, String]("CluStreamTest3", null, point)
+            //producer.send(message)
+            //producer.send(message1)
+            producer.send(message2)
             println(point+"---"+num)
             num+=1
           }

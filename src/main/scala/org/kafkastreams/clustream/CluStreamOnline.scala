@@ -51,12 +51,6 @@ class CluStreamOnline(
     * @param point
     */
   def initKmeans(point:Vector[Double]):Unit = {
-    if(sendClusterToTopic){
-      microClusters = Array.fill(q)(new MicroCluster(Vector.fill[Double](numDimensions)(0.0), Vector.fill[Double](numDimensions)(0.0), 0L, 0L, 0L))
-      initialClusters = Array.fill(q)(new kmeansModel(Vector.fill[Double](numDimensions)(0.0),1))
-      initNum = 0;
-      sendClusterToTopic = false
-    }
     //1.前q个点用来初始化(最开始选的q个中心点)
     if(initNum < q){
       initialClusters(initNum).setCf1x(point)
@@ -67,7 +61,7 @@ class CluStreamOnline(
       //1.计算point到每个中心点
       var minDist = Double.PositiveInfinity
       var minIndex = 0
-      for(i <- 0 until microClusters.length - 1){
+      for(i <- 0 until microClusters.length){
         val dist = squaredDistance(initialClusters(i).getCenter, point)
         if (dist < minDist) {
           minDist = dist
@@ -435,11 +429,11 @@ class CluStreamOnline(
     var delete = false
     var order = 0
     val mcs = this.getMicroClusters
-//    println("===========================================================OnlineResult-begin============================================================")
-//    for (mc:MicroCluster <- mcs){
-//      print(mc)
-//    }
-//    println("===========================================================OnlineResult-end=================================================================")
+    println("===========================================================OnlineResult-begin============================================================")
+    for (mc:MicroCluster <- mcs){
+      print(mc)
+    }
+    println("===========================================================OnlineResult-end=================================================================")
     val exp = (scala.math.log(tc) / scala.math.log(alpha)).toInt
 
     for (i <- 0 to exp) {

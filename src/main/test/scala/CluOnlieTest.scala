@@ -11,7 +11,7 @@ class CluOnlieTest {
   @Test
   def TestgetSnaps: Unit ={
     val Clu : Clustream = new Clustream()
-    val snapsPath = "/home/hadoop/clustream/snap1"
+    val snapsPath = "/home/hadoop/clustream/snap"
 //    println(Clu.getSnapShots(snapsPath,17,15))
 //    val snap1 = Clu.getMCsFromSnapshots(snapsPath,17,15)
 //    println(snap1.map(a => a.getN).mkString("[",",","]"))
@@ -26,9 +26,9 @@ class CluOnlieTest {
 //    }
 
     //    for(i <- 2 until  12) {
-    if(Files.exists(Paths.get(snapsPath+ "/" + 18)))
+    if(Files.exists(Paths.get(snapsPath+ "/" + 17)))
       try {
-        val file = new ObjectInputStream(new FileInputStream(snapsPath + "/" + 18))
+        val file = new ObjectInputStream(new FileInputStream(snapsPath + "/" +17))
         val mcs = file.readObject().asInstanceOf[Array[MicroCluster]]
         println(mcs.map(a => a.getN).mkString("[",",","]"))
         println("mics points = " + mcs.map(_.getN).sum)

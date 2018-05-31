@@ -260,7 +260,7 @@ object Clustream{
 
 class OnlineTask extends Runnable{
   override def run(): Unit = {
-    val inputTopic = "CluStreamTest2"
+    val inputTopic = "CluStreamTest3"
     //val inputTopic = "dataset"
     val middleTopic = "CluSterAsPointTest1"
 
@@ -336,11 +336,11 @@ class SendTask (val cluOnline : CluStreamOnline,val producerProperties: Properti
     }
 
     if(hasAnypoint){
-      println("*************************************************************************Send to Middle Topic**********************************************************************************")
-      println("before Time:"+cluOnline.getCurrentTime)
+//      println("*************************************************************************Send to Middle Topic**********************************************************************************")
+//      println("before Time:"+cluOnline.getCurrentTime)
       cluOnline.sendClustersToTopic(topicName,schemaRegistryUrl,producerProperties)
-      println("after Time:"+cluOnline.getCurrentTime)
-      println("*************************************************************************Send to Middle Topic END**********************************************************************************")
+//      println("after Time:"+cluOnline.getCurrentTime)
+//      println("*************************************************************************Send to Middle Topic END**********************************************************************************")
     }
   }
 }

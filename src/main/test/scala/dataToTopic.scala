@@ -7,7 +7,7 @@ import scala.util.control.Breaks
 
 object dataToTopic {
   def main(args: Array[String]): Unit = {
-    val messagesPerSec = 500
+    val messagesPerSec = 2000
     val props = new HashMap[String, Object]()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -16,7 +16,7 @@ object dataToTopic {
       "org.apache.kafka.common.serialization.StringSerializer")
     val producer = new KafkaProducer[String, String](props)
 
-    val pointNum = 100000
+    val pointNum = 200000
     val readPath = "/home/hadoop/clustream/dataset/data.txt"
     val read: BufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(readPath)))
     var i = 0
@@ -39,6 +39,7 @@ object dataToTopic {
             producer.send(message2)
             println(point+"---"+num)
             num+=1
+
           }
           else
             loop.break()

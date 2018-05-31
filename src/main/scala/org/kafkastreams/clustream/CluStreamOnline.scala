@@ -97,7 +97,7 @@ class CluStreamOnline(
    def initRandom = {
     this.time.set(0)
     for(mc <- microClusters){
-      mc.setCenter(Vector.fill[Double](numDimensions)(scala.util.Random.nextInt(100).toString.toDouble))
+      mc.setCenter(Vector.fill[Double](numDimensions)((scala.util.Random.nextInt(40)+10).toString.toDouble))
     }
     for(mc <- microClusters)
       mc.setRmsd(distanceNearestMC(mc.center))
